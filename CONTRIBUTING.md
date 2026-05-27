@@ -6,17 +6,12 @@ follows. For how the codebase is structured and why decisions were made, see
 
 ## Commit messages
 
-We use [Conventional Commits](https://www.conventionalcommits.org/). Each commit
-subject takes the form:
+We follow [Conventional Commits](https://www.conventionalcommits.org/) — see
+the spec for the format, allowed structure, and general guidance.
 
-```
-type(scope): subject
-```
+### Types we use
 
-The `scope` is optional. Use the imperative mood for the subject ("add", not
-"added" or "adds") and keep it concise.
-
-### Types
+The spec is permissive about types; this project uses the following subset:
 
 | Type       | Use for                                                        |
 | ---------- | -------------------------------------------------------------- |
