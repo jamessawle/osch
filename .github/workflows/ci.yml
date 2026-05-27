@@ -34,3 +34,8 @@ jobs:
             echo "$fmt_out"
             exit 1
           fi
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
