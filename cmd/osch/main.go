@@ -1,3 +1,4 @@
+// Package main implements the osch CLI.
 package main
 
 import (
