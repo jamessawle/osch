@@ -2,10 +2,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/jamessawle/osch/internal/github"
 )
 
 var (
@@ -36,9 +39,30 @@ func run(args []string, stdout io.Writer) error {
 			}
 		}
 		return printVersion(stdout, jsonOut)
+	case "add":
+		return runAdd(context.Background(), github.NewHTTPClient(), args[1:], stdout)
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
+}
+
+// runAdd validates the repo argument and reports the upstream schemas/ folder.
+// Every failure is returned as a friendly, non-stacktrace error so main can
+// print it and exit non-zero.
+func runAdd(ctx context.Context, client github.Client, args []string, stdout io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: osch add <user/repo>")
+	}
+	repo, err := github.ParseRepo(args[0])
+	if err != nil {
+		return err
+	}
+	names, err := client.ListSchemas(ctx, repo)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "found %d schema(s) in %s\n", len(names), repo)
+	return err
 }
 
 func printVersion(w io.Writer, asJSON bool) error {
