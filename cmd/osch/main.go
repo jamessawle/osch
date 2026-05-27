@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/jamessawle/osch/internal/github"
+	"github.com/jamessawle/osch/internal/source"
 )
 
 var (
@@ -40,28 +41,44 @@ func run(args []string, stdout io.Writer) error {
 		}
 		return printVersion(stdout, jsonOut)
 	case "add":
-		return runAdd(context.Background(), github.NewHTTPClient(), args[1:], stdout)
+		client, err := clientForHost(source.HostGitHub)
+		if err != nil {
+			return err
+		}
+		return runAdd(context.Background(), client, args[1:], stdout)
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
+	}
+}
+
+// clientForHost returns the concrete source client for a host. This switch is
+// the single place that knows about concrete host implementations; adding a
+// second host (per ADR 0004) means adding a branch here.
+func clientForHost(host string) (source.Client, error) {
+	switch host {
+	case source.HostGitHub:
+		return github.NewClient(), nil
+	default:
+		return nil, fmt.Errorf("unsupported source host %q", host)
 	}
 }
 
 // runAdd validates the repo argument and reports the upstream schemas/ folder.
 // Every failure is returned as a friendly, non-stacktrace error so main can
 // print it and exit non-zero.
-func runAdd(ctx context.Context, client github.Client, args []string, stdout io.Writer) error {
+func runAdd(ctx context.Context, client source.Client, args []string, stdout io.Writer) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: osch add <user/repo>")
 	}
-	repo, err := github.ParseRepo(args[0])
+	ref, err := source.ParseRef(args[0])
 	if err != nil {
 		return err
 	}
-	names, err := client.ListSchemas(ctx, repo)
+	names, err := client.ListSchemas(ctx, ref)
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "found %d schema(s) in %s\n", len(names), repo)
+	_, err = fmt.Fprintf(stdout, "found %d schema(s) in %s\n", len(names), ref)
 	return err
 }
 

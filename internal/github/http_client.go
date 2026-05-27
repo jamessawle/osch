@@ -1,3 +1,6 @@
+// Package github is the GitHub implementation of source.Client. It reads
+// schema folders from GitHub repositories via the REST API and maps GitHub's
+// HTTP status codes onto the host-agnostic error vocabulary in internal/source.
 package github
 
 import (
@@ -8,6 +11,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/jamessawle/osch/internal/source"
 )
 
 const defaultBaseURL = "https://api.github.com"
@@ -17,6 +22,11 @@ const defaultBaseURL = "https://api.github.com"
 type HTTPClient struct {
 	BaseURL *url.URL
 	HTTP    *http.Client
+}
+
+// NewClient returns the GitHub source.Client pointed at the public GitHub API.
+func NewClient() source.Client {
+	return NewHTTPClient()
 }
 
 // NewHTTPClient returns an HTTPClient pointed at the public GitHub API with a
@@ -35,36 +45,36 @@ type contentEntry struct {
 	Name string `json:"name"`
 }
 
-// ListSchemas returns the names of files under schemas/ at the repo's default
-// branch HEAD. All failures are reported as *ClientError with a friendly
+// ListSchemas returns the names of files under schemas/ at the ref's default
+// branch HEAD. All failures are reported as *source.ClientError with a friendly
 // message. It first confirms the repo is reachable so a 404 on the contents
 // endpoint can be reported as "no schemas/ folder" rather than "not found".
-func (c *HTTPClient) ListSchemas(ctx context.Context, repo Repo) ([]string, error) {
-	repoStatus, _, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", repo.Owner, repo.Name))
+func (c *HTTPClient) ListSchemas(ctx context.Context, ref source.Ref) ([]string, error) {
+	repoStatus, _, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", ref.Owner, ref.Name))
 	if err != nil {
-		return nil, NetworkError(repo, err)
+		return nil, source.NetworkError(ref, err)
 	}
 	if repoStatus == http.StatusNotFound {
-		return nil, NotFoundError(repo)
+		return nil, source.NotFoundError(ref)
 	}
 	if repoStatus != http.StatusOK {
-		return nil, NetworkError(repo, fmt.Errorf("unexpected status %d from GitHub", repoStatus))
+		return nil, source.NetworkError(ref, fmt.Errorf("unexpected status %d from GitHub", repoStatus))
 	}
 
-	status, body, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/schemas", repo.Owner, repo.Name))
+	status, body, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/schemas", ref.Owner, ref.Name))
 	if err != nil {
-		return nil, NetworkError(repo, err)
+		return nil, source.NetworkError(ref, err)
 	}
 	if status == http.StatusNotFound {
-		return nil, NoSchemasError(repo)
+		return nil, source.NoSchemasError(ref)
 	}
 	if status != http.StatusOK {
-		return nil, NetworkError(repo, fmt.Errorf("unexpected status %d from GitHub", status))
+		return nil, source.NetworkError(ref, fmt.Errorf("unexpected status %d from GitHub", status))
 	}
 
 	var entries []contentEntry
 	if err := json.Unmarshal(body, &entries); err != nil {
-		return nil, NetworkError(repo, fmt.Errorf("could not parse GitHub response: %w", err))
+		return nil, source.NetworkError(ref, fmt.Errorf("could not parse GitHub response: %w", err))
 	}
 
 	names := make([]string, 0, len(entries))
@@ -74,7 +84,7 @@ func (c *HTTPClient) ListSchemas(ctx context.Context, repo Repo) ([]string, erro
 		}
 	}
 	if len(names) == 0 {
-		return nil, EmptySchemasError(repo)
+		return nil, source.EmptySchemasError(ref)
 	}
 	return names, nil
 }
