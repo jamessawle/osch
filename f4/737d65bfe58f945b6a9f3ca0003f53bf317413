@@ -1,0 +1,9 @@
+scripts/agent-loop/loop.sh
+  ai_agent 122,168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "f4737d65bfe58f945b6a9f3ca0003f53bf317413",
+  "prompts": {}
+}
