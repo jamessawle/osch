@@ -77,7 +77,7 @@ brews:
           branch: main
     directory: Formula
     homepage: "https://github.com/jamessawle/osch"
-    description: "CLI for managing OpenSpec schemas across repos."
+    description: "CLI for managing OpenSpec schemas across repos"
     license: "MIT"
     commit_author:
       name: goreleaserbot
