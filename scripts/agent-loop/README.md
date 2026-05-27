@@ -3,7 +3,7 @@
 **This is personal development automation, not part of `osch`.**
 
 A long-running Bash poller that watches the GitHub repo for issues labelled
-`agent:implement`, dispatches each one to a local `claude -p` invocation
+`ready-for-agent`, dispatches each one to a local `claude -p` invocation
 in an isolated git worktree, and opens a PR if the run produces commits.
 
 If this turns out to be useful beyond `osch`, it should be extracted to its
@@ -28,11 +28,13 @@ The poller checks for all of these at startup and exits with an error if any are
 
 ## Labels
 
-State machine lives in GitHub labels:
+The loop's entry gate is the `ready-for-agent` triage role — issues reach it
+via `/triage` (grilled, agent-brief written), not by hand. From there the loop
+manages its own runtime state in `agent:*` labels:
 
-- `agent:implement` — queued; the next poll cycle will claim it
+- `ready-for-agent` — queued; the next poll cycle will claim it (set by triage)
 - `agent:in-progress` — poller has claimed it; do not touch
-- `agent:failed` — last run failed; comment on the issue contains the tail of `claude` output. Re-label as `agent:implement` to retry.
+- `agent:failed` — last run failed; comment on the issue contains the tail of `claude` output. Re-label as `ready-for-agent` to retry.
 - `agent:authored` — applied to PRs opened by the poller
 
 ## Behaviour
