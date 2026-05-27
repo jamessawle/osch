@@ -1,0 +1,9 @@
+.goreleaser.yaml
+  ai_agent 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "f6f20887fa6d45d00677a53c2e6acff99dbad6e9",
+  "prompts": {}
+}
