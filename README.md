@@ -17,3 +17,7 @@ This installs the local git hooks via [lefthook](https://github.com/evilmartians
 - `make lint` — runs `golangci-lint run` (mirrors CI).
 - `make test` — runs `go test ./...` (mirrors CI).
 - `make build` — runs `go build ./...`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
