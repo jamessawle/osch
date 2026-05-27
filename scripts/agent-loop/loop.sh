@@ -119,7 +119,7 @@ EOF
     log "Invoking claude -p (output captured to ${output_file})"
 
     local exit_code=0
-    (cd "$worktree" && claude -p "$prompt") >"$output_file" 2>&1 || exit_code=$?
+    (cd "$worktree" && claude -p --dangerously-skip-permissions "$prompt") >"$output_file" 2>&1 || exit_code=$?
 
     local output_tail
     output_tail="$(tail -n 50 "$output_file")"
@@ -165,7 +165,7 @@ The description should cover: what changed and why (not a diff restatement), the
 EOF
 )"
 
-    if ! (cd "$worktree" && claude -p "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
+    if ! (cd "$worktree" && claude -p --dangerously-skip-permissions "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
         log "WARN: PR description generation failed; falling back to minimal body"
         printf 'Implements #%s.\n' "$n" > "$pr_body_file"
     fi
