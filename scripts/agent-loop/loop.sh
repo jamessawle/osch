@@ -2,7 +2,7 @@
 # scripts/agent-loop/loop.sh
 #
 # Personal development automation: poll GitHub for issues labelled
-# `agent:implement`, dispatch each to `claude -p` in an isolated git
+# `ready-for-agent`, dispatch each to `claude -p` in an isolated git
 # worktree, open a PR if the run produced commits.
 #
 # See scripts/agent-loop/README.md for full docs.
@@ -13,7 +13,7 @@ set -euo pipefail
 
 POLL_INTERVAL="${POLL_INTERVAL:-60}"
 
-LABEL_QUEUE="agent:implement"
+LABEL_QUEUE="ready-for-agent"
 LABEL_PROGRESS="agent:in-progress"
 LABEL_FAILED="agent:failed"
 LABEL_AUTHORED="agent:authored"
