@@ -6,17 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jamessawle/osch/internal/github"
+	"github.com/jamessawle/osch/internal/source"
 )
 
-// fakeClient is a stand-in for the GitHub client used to exercise each error
+// fakeClient is a stand-in for a source client used to exercise each error
 // path of the add command without touching the network.
 type fakeClient struct {
 	names []string
 	err   error
 }
 
-func (f fakeClient) ListSchemas(_ context.Context, _ github.Repo) ([]string, error) {
+func (f fakeClient) ListSchemas(_ context.Context, _ source.Ref) ([]string, error) {
 	return f.names, f.err
 }
 
@@ -62,15 +62,15 @@ func TestRunAddInvalidRepoArg(t *testing.T) {
 }
 
 func TestRunAddUpstreamErrors(t *testing.T) {
-	repo := github.Repo{Owner: "acme", Name: "widgets"}
+	ref := source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"}
 	cases := []struct {
 		name string
 		err  error
 	}{
-		{"not found", github.NotFoundError(repo)},
-		{"no schemas", github.NoSchemasError(repo)},
-		{"empty schemas", github.EmptySchemasError(repo)},
-		{"network", github.NetworkError(repo, context.DeadlineExceeded)},
+		{"not found", source.NotFoundError(ref)},
+		{"no schemas", source.NoSchemasError(ref)},
+		{"empty schemas", source.EmptySchemasError(ref)},
+		{"network", source.NetworkError(ref, context.DeadlineExceeded)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

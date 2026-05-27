@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/jamessawle/osch/internal/source"
 )
 
 // newTestClient points an HTTPClient at a test server.
@@ -39,7 +41,7 @@ func TestHTTPClientSuccess(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	got, err := c.ListSchemas(context.Background(), Repo{Owner: "acme", Name: "widgets"})
+	got, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,8 +58,8 @@ func TestHTTPClientRepoNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), Repo{Owner: "acme", Name: "ghost"})
-	assertKind(t, err, KindNotFound)
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "ghost"})
+	assertKind(t, err, source.KindNotFound)
 }
 
 func TestHTTPClientNoSchemasFolder(t *testing.T) {
@@ -74,8 +76,8 @@ func TestHTTPClientNoSchemasFolder(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), Repo{Owner: "acme", Name: "widgets"})
-	assertKind(t, err, KindNoSchemas)
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
+	assertKind(t, err, source.KindNoSchemas)
 }
 
 func TestHTTPClientEmptySchemasFolder(t *testing.T) {
@@ -92,8 +94,8 @@ func TestHTTPClientEmptySchemasFolder(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), Repo{Owner: "acme", Name: "widgets"})
-	assertKind(t, err, KindEmptySchemas)
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
+	assertKind(t, err, source.KindEmptySchemas)
 }
 
 func TestHTTPClientNetworkError(t *testing.T) {
@@ -102,8 +104,8 @@ func TestHTTPClientNetworkError(t *testing.T) {
 	c := newTestClient(t, srv)
 	srv.Close()
 
-	_, err := c.ListSchemas(context.Background(), Repo{Owner: "acme", Name: "widgets"})
-	assertKind(t, err, KindNetwork)
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
+	assertKind(t, err, source.KindNetwork)
 }
 
 func TestHTTPClientContextTimeout(t *testing.T) {
@@ -116,18 +118,18 @@ func TestHTTPClientContextTimeout(t *testing.T) {
 	c := newTestClient(t, srv)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
-	_, err := c.ListSchemas(ctx, Repo{Owner: "acme", Name: "widgets"})
-	assertKind(t, err, KindNetwork)
+	_, err := c.ListSchemas(ctx, source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
+	assertKind(t, err, source.KindNetwork)
 }
 
-func assertKind(t *testing.T, err error, want ErrorKind) {
+func assertKind(t *testing.T, err error, want source.ErrorKind) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("expected error of kind %d, got nil", want)
 	}
-	ce, ok := err.(*ClientError)
+	ce, ok := err.(*source.ClientError)
 	if !ok {
-		t.Fatalf("expected *ClientError, got %T: %v", err, err)
+		t.Fatalf("expected *source.ClientError, got %T: %v", err, err)
 	}
 	if ce.Kind != want {
 		t.Errorf("got kind %d, want %d (msg: %s)", ce.Kind, want, ce.Error())
