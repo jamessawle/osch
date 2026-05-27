@@ -7,8 +7,12 @@ on:
 
 jobs:
   test:
-    name: test
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -21,7 +25,7 @@ jobs:
         run: go build ./...
 
       - name: Test
-        run: go test ./...
+        run: go test -race ./...
 
       - name: Vet
         run: go vet ./...
