@@ -1,0 +1,19 @@
+internal/github/http_client_test.go
+  ai_agent 1-135
+cmd/osch/main.go
+  ai_agent 5,10-11,42-43,49-65
+internal/github/client.go
+  ai_agent 1-103
+cmd/osch/add_test.go
+  ai_agent 1-97
+internal/github/http_client.go
+  ai_agent 1-105
+internal/github/client_test.go
+  ai_agent 1-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "f3a90e9a7f442a0973ffd4fea5ef1521d65d31cf",
+  "prompts": {}
+}
