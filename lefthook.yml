@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "gofmt found unformatted files:"
+          echo "$unformatted"
+          exit 1
+        fi
+    govet:
+      run: go vet ./...
+    golangci-lint:
+      run: golangci-lint run
