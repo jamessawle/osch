@@ -1,0 +1,9 @@
+.github/CODEOWNERS
+  ai_agent 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "b0e69d89087f2902e12b26d370a9c4eac928161a",
+  "prompts": {}
+}
