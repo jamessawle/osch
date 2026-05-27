@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# scripts/agent-loop/loop.sh
+#
+# Personal development automation: poll GitHub for issues labelled
+# `agent:implement`, dispatch each to `claude -p` in an isolated git
+# worktree, open a PR if the run produced commits.
+#
+# See scripts/agent-loop/README.md for full docs.
+
+set -euo pipefail
+
+# --- Configuration -----------------------------------------------------------
+
+POLL_INTERVAL="${POLL_INTERVAL:-60}"
+
+LABEL_QUEUE="agent:implement"
+LABEL_PROGRESS="agent:in-progress"
+LABEL_FAILED="agent:failed"
+LABEL_AUTHORED="agent:authored"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+WORKTREE_BASE="$(dirname "$REPO_ROOT")"
+REPO_NAME="$(basename "$REPO_ROOT")"
+
+# --- Helpers -----------------------------------------------------------------
+
+log() {
+    printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"
+}
+
+die() {
+    printf '[FATAL] %s\n' "$*" >&2
+    exit 1
+}
+
+require_tool() {
+    command -v "$1" >/dev/null 2>&1 || die "required tool not found on PATH: $1"
+}
+
+# --- Preflight ---------------------------------------------------------------
+
+require_tool gh
+require_tool git
+require_tool claude
+require_tool jq
+
+gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run 'gh auth login'."
+
+# --- Failure handling --------------------------------------------------------
+
+fail_issue() {
+    local n="$1"
+    local tail_text="$2"
+
+    gh issue edit "$n" \
+        --remove-label "$LABEL_PROGRESS" \
+        --add-label "$LABEL_FAILED" >/dev/null || true
+
+    gh issue comment "$n" --body "Agent run failed. Last output:
+
+\`\`\`
+${tail_text}
+\`\`\`" >/dev/null || true
+}
+
+# --- Issue processing --------------------------------------------------------
+
+process_issue() {
+    local issue_json="$1"
+    local n title body branch worktree
+
+    n=$(echo "$issue_json" | jq -r '.number')
+    title=$(echo "$issue_json" | jq -r '.title')
+    body=$(echo "$issue_json" | jq -r '.body // ""')
+
+    branch="agent/issue-${n}"
+    worktree="${WORKTREE_BASE}/${REPO_NAME}-agent-${n}"
+
+    log "Claiming issue #${n}: ${title}"
+    if ! gh issue edit "$n" \
+            --remove-label "$LABEL_QUEUE" \
+            --add-label "$LABEL_PROGRESS" >/dev/null; then
+        log "WARN: failed to claim #${n} (label race?). Skipping."
+        return
+    fi
+
+    log "Fetching origin/main..."
+    git -C "$REPO_ROOT" fetch origin main --quiet
+
+    if [ -e "$worktree" ]; then
+        log "WARN: worktree path ${worktree} already exists; removing"
+        git -C "$REPO_ROOT" worktree remove --force "$worktree" 2>/dev/null || rm -rf "$worktree"
+    fi
+
+    log "Creating worktree at ${worktree}"
+    git -C "$REPO_ROOT" worktree add "$worktree" -b "$branch" origin/main
+
+    local prompt
+    prompt="$(cat <<EOF
+You are implementing GitHub issue #${n}.
+
+Issue title: ${title}
+
+Issue body:
+${body}
+
+Instructions:
+- Read CLAUDE.md in the repo root for project conventions.
+- Make the edits the issue requires.
+- Run any relevant local checks (build, tests, gofmt, vet).
+- Commit your changes with Conventional Commit messages (e.g. 'feat:', 'fix:', 'chore:', 'docs:'). Reference the issue with 'Refs #${n}' in the commit body.
+- DO NOT push the branch and DO NOT open a pull request — the calling script will handle that.
+- If an acceptance criterion is unclear, stop without committing.
+EOF
+)"
+
+    local output_file
+    output_file="$(mktemp)"
+    log "Invoking claude -p (output captured to ${output_file})"
+
+    local exit_code=0
+    (cd "$worktree" && claude -p "$prompt") >"$output_file" 2>&1 || exit_code=$?
+
+    local output_tail
+    output_tail="$(tail -n 50 "$output_file")"
+    rm -f "$output_file"
+
+    if [ "$exit_code" -ne 0 ]; then
+        log "Claude exited ${exit_code} for #${n}; marking failed"
+        fail_issue "$n" "$output_tail"
+        git -C "$REPO_ROOT" worktree remove --force "$worktree" || true
+        return
+    fi
+
+    local commit_count
+    commit_count="$(git -C "$worktree" rev-list origin/main..HEAD --count)"
+    if [ "$commit_count" -eq 0 ]; then
+        log "No new commits produced for #${n}; marking failed"
+        fail_issue "$n" "$output_tail"
+        git -C "$REPO_ROOT" worktree remove --force "$worktree" || true
+        return
+    fi
+
+    log "Pushing ${branch} (${commit_count} commit(s))"
+    if ! git -C "$worktree" push -u origin "$branch"; then
+        log "Push failed for #${n}; marking failed"
+        fail_issue "$n" "push failed for branch ${branch}"
+        return
+    fi
+
+    # Generate the PR body via the pr-management:write-pr-description skill.
+    # The skill is enabled at the project level via .claude/settings.json, so a
+    # `claude -p` run from inside the worktree has access to it.
+    log "Generating PR body via /pr-management:write-pr-description"
+    local pr_body_file
+    pr_body_file="$(mktemp)"
+
+    local pr_prompt
+    pr_prompt="$(cat <<EOF
+Use the /pr-management:write-pr-description skill to produce a pull request description for the commits on the current branch (compared to origin/main). The PR is implementing GitHub issue #${n}: "${title}".
+
+Output ONLY the PR description markdown to stdout, with no preamble, no commentary, no trailing text. Do not open the PR — the calling script will do that. Do not commit anything.
+
+The description should cover: what changed and why (not a diff restatement), the approach chosen, and any trade-offs or follow-ups worth noting.
+EOF
+)"
+
+    if ! (cd "$worktree" && claude -p "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
+        log "WARN: PR description generation failed; falling back to minimal body"
+        printf 'Implements #%s.\n' "$n" > "$pr_body_file"
+    fi
+
+    # Strip leading/trailing blank lines and append the issue-linking line.
+    # This guarantees PR-to-issue auto-close works even if the skill output
+    # omitted it.
+    awk 'NF{p=1} p' "$pr_body_file" | awk 'BEGIN{RS=""; FS=""} {print}' > "${pr_body_file}.tmp" && mv "${pr_body_file}.tmp" "$pr_body_file"
+    printf '\n\nCloses #%s\n' "$n" >> "$pr_body_file"
+
+    log "Opening PR for #${n}"
+    if ! gh pr create \
+            --head "$branch" \
+            --base main \
+            --title "${title} (#${n})" \
+            --body-file "$pr_body_file" \
+            --label "$LABEL_AUTHORED" >/dev/null; then
+        log "gh pr create failed for #${n}; marking failed"
+        fail_issue "$n" "gh pr create failed for branch ${branch}"
+        rm -f "$pr_body_file"
+        return
+    fi
+    rm -f "$pr_body_file"
+
+    gh issue edit "$n" --remove-label "$LABEL_PROGRESS" >/dev/null || true
+    log "Done with #${n}. Worktree retained at ${worktree} (clean up manually after merge)."
+}
+
+# --- Main loop ---------------------------------------------------------------
+
+log "Agent loop started. Polling every ${POLL_INTERVAL}s for label '${LABEL_QUEUE}'. Ctrl-C to stop."
+
+while true; do
+    issue_json="$(gh issue list \
+        --label "$LABEL_QUEUE" \
+        --state open \
+        --limit 1 \
+        --json number,title,body \
+        | jq -c '.[0] // empty')"
+
+    if [ -z "$issue_json" ]; then
+        sleep "$POLL_INTERVAL"
+        continue
+    fi
+
+    process_issue "$issue_json"
+done
