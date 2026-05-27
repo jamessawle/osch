@@ -20,4 +20,4 @@ This installs the local git hooks via [lefthook](https://github.com/evilmartians
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
