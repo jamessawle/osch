@@ -69,8 +69,12 @@ brews:
     repository:
       owner: jamessawle
       name: homebrew-tap
-      branch: main
+      branch: "osch-{{ .Tag }}"
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      pull_request:
+        enabled: true
+        base:
+          branch: main
     directory: Formula
     homepage: "https://github.com/jamessawle/osch"
     description: "CLI for managing OpenSpec schemas across repos."
