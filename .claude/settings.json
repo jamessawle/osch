@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "jamessawle-skills": {
+      "source": {
+        "source": "github",
+        "repo": "jamessawle/skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "pr-management@jamessawle-skills": true
+  }
+}
