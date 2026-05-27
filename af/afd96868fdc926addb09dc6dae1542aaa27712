@@ -1,0 +1,13 @@
+lefthook.yml
+  ai_agent 1-15
+README.md
+  ai_agent 1-19
+Makefile
+  ai_agent 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "afafd96868fdc926addb09dc6dae1542aaa27712",
+  "prompts": {}
+}
