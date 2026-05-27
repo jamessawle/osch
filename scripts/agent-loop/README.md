@@ -40,6 +40,9 @@ manages its own runtime state in `agent:*` labels:
 ## Behaviour
 
 - Sequential: one issue per loop iteration. No concurrency.
+- Spec source: the agent is prompted with the issue body **plus** the `## Agent
+  Brief` comment that `/triage` posts (the authoritative contract; the body is
+  context). Issues with no brief comment fall back to the body alone.
 - No retries: a failed run flips to `agent:failed` and the poller moves on.
 - Worktrees live at `../osch-agent-<N>` and are NOT auto-cleaned on PR merge.
   Clean them manually with `git worktree remove ../osch-agent-<N>` once the PR lands.
