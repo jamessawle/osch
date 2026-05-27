@@ -119,7 +119,10 @@ EOF
     log "Invoking claude -p (output captured to ${output_file})"
 
     local exit_code=0
-    (cd "$worktree" && claude -p --dangerously-skip-permissions "$prompt") >"$output_file" 2>&1 || exit_code=$?
+    # --permission-mode dontAsk activates the persistent permissions.allow /
+    # permissions.deny rules in .claude/settings.json; without the flag, the
+    # settings rules are inert in headless mode.
+    (cd "$worktree" && claude -p --permission-mode dontAsk "$prompt") >"$output_file" 2>&1 || exit_code=$?
 
     local output_tail
     output_tail="$(tail -n 50 "$output_file")"
@@ -165,7 +168,7 @@ The description should cover: what changed and why (not a diff restatement), the
 EOF
 )"
 
-    if ! (cd "$worktree" && claude -p --dangerously-skip-permissions "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
+    if ! (cd "$worktree" && claude -p --permission-mode dontAsk "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
         log "WARN: PR description generation failed; falling back to minimal body"
         printf 'Implements #%s.\n' "$n" > "$pr_body_file"
     fi

@@ -43,6 +43,21 @@ State machine lives in GitHub labels:
   Clean them manually with `git worktree remove ../osch-agent-<N>` once the PR lands.
 - Claude does the editing and committing. The poller does the pushing and PR-opening.
 
+## Permissions
+
+The agent runs inside a disposable worktree, so the goal is to allow broadly
+within that sandbox while denying operations that escape it — pushing
+branches, opening or closing PRs, mutating issue state, touching remotes,
+reaching out to the network, or duplicating work the loop already does. The
+concrete allow/deny lists live in `.claude/settings.json` under the
+`permissions` key, paired with `--permission-mode dontAsk` on each
+`claude -p` invocation (without that flag the settings rules are inert in
+headless mode).
+
+If a future task genuinely needs a capability that's currently blocked,
+extend the allowlist by the minimum required — and, if it's a risky
+operation, add a matching deny rule to keep the escape hatches closed.
+
 ## Configuration
 
 Environment variables (all optional):
