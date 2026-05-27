@@ -46,6 +46,17 @@ require_tool() {
     command -v "$1" >/dev/null 2>&1 || die "required tool not found on PATH: $1"
 }
 
+# Print the agent brief for an issue: the body of the most recent comment that
+# contains a "## Agent Brief" heading. Empty output means no brief was posted
+# (older issues, or ones queued by hand) — callers fall back to the body alone.
+# Runs with the loop's own gh auth, so the agent sandbox denies don't apply.
+fetch_agent_brief() {
+    local n="$1"
+    gh issue view "$n" --json comments \
+        --jq '[.comments[] | select((.body // "") | contains("## Agent Brief"))] | last | .body // ""' \
+        2>/dev/null || true
+}
+
 # --- Preflight ---------------------------------------------------------------
 
 require_tool gh
@@ -111,6 +122,21 @@ process_issue() {
     log "Creating worktree at ${worktree}"
     git -C "$REPO_ROOT" worktree add "$worktree" -b "$branch" origin/main
 
+    # The authoritative spec lives in the "## Agent Brief" comment (added by
+    # /triage); the body is supporting context. Older issues with no brief
+    # fall back to body alone.
+    local brief brief_block=""
+    brief="$(fetch_agent_brief "$n")"
+    if [ -n "$brief" ]; then
+        brief_block="$(cat <<EOF
+
+
+Agent brief (authoritative specification — treat this as the contract; the issue body above is supporting context):
+${brief}
+EOF
+)"
+    fi
+
     local prompt
     prompt="$(cat <<EOF
 You are implementing GitHub issue #${n}.
@@ -119,6 +145,7 @@ Issue title: ${title}
 
 Issue body:
 ${body}
+${brief_block}
 
 Instructions:
 - Read CLAUDE.md in the repo root for project conventions.
