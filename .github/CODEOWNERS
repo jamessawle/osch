@@ -1,0 +1,3 @@
+# Default: every file is owned by jamessawle.
+# Required because branch protection enables "require code-owner reviews".
+* @jamessawle
