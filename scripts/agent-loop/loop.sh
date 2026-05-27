@@ -22,6 +22,15 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 WORKTREE_BASE="$(dirname "$REPO_ROOT")"
 REPO_NAME="$(basename "$REPO_ROOT")"
 
+# Agent-only permission restrictions. Loaded via `claude --settings` on every
+# `claude -p` invocation so they layer on top of the interactive baseline in
+# .claude/settings.json (deny rules are unioned across settings sources). This
+# file lives next to the loop, not the worktree, so the sandbox policy is fixed
+# by the loop rather than by whatever branch the agent happens to check out.
+# See README.md ("Permissions") for the rationale.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENT_SETTINGS="${SCRIPT_DIR}/settings.json"
+
 # --- Helpers -----------------------------------------------------------------
 
 log() {
@@ -45,6 +54,13 @@ require_tool claude
 require_tool jq
 
 gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run 'gh auth login'."
+
+# Fail loudly if the agent settings file is missing or invalid JSON. In
+# `claude -p` mode a settings file that fails validation is silently ignored,
+# which would drop the sandbox denies without any error — so we guard here
+# rather than discover it after a runaway agent has escaped.
+[ -f "$AGENT_SETTINGS" ] || die "agent settings file not found: $AGENT_SETTINGS"
+jq empty "$AGENT_SETTINGS" >/dev/null 2>&1 || die "agent settings file is not valid JSON: $AGENT_SETTINGS"
 
 # --- Failure handling --------------------------------------------------------
 
@@ -120,9 +136,10 @@ EOF
 
     local exit_code=0
     # --permission-mode dontAsk activates the persistent permissions.allow /
-    # permissions.deny rules in .claude/settings.json; without the flag, the
-    # settings rules are inert in headless mode.
-    (cd "$worktree" && claude -p --permission-mode dontAsk "$prompt") >"$output_file" 2>&1 || exit_code=$?
+    # permissions.deny rules; without the flag, the settings rules are inert in
+    # headless mode. --settings layers the agent-only deny list on top of the
+    # repo's interactive baseline so a runaway agent stays in its sandbox.
+    (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$AGENT_SETTINGS" "$prompt") >"$output_file" 2>&1 || exit_code=$?
 
     local output_tail
     output_tail="$(tail -n 50 "$output_file")"
@@ -168,7 +185,7 @@ The description should cover: what changed and why (not a diff restatement), the
 EOF
 )"
 
-    if ! (cd "$worktree" && claude -p --permission-mode dontAsk "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
+    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$AGENT_SETTINGS" "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
         log "WARN: PR description generation failed; falling back to minimal body"
         printf 'Implements #%s.\n' "$n" > "$pr_body_file"
     fi
