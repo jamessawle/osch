@@ -1,0 +1,15 @@
+internal/github/http_client_test.go
+  ai_agent 14-15,18,54-107
+internal/github/token_test.go
+  ai_agent 1-84
+internal/github/http_client.go
+  ai_agent 25-28,37-39,41-47,52,117-119
+internal/github/token.go
+  ai_agent 1-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "19f9eb7b547cdde4cfdfd86b6b556a87b79ce90e",
+  "prompts": {}
+}
