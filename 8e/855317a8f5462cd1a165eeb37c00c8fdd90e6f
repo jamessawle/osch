@@ -1,0 +1,11 @@
+scripts/agent-loop/loop.sh
+  ai_agent 1-215
+scripts/agent-loop/README.md
+  ai_agent 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "8e855317a8f5462cd1a165eeb37c00c8fdd90e6f",
+  "prompts": {}
+}
