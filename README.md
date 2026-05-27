@@ -1,23 +1,51 @@
 # osch
 
-CLI for managing OpenSpec schemas across repos.
+[![CI](https://github.com/jamessawle/osch/actions/workflows/ci.yml/badge.svg)](https://github.com/jamessawle/osch/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/jamessawle/osch)](https://github.com/jamessawle/osch/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/jamessawle/osch)](LICENSE)
 
-## Setup
+`osch` is a command-line tool for managing [OpenSpec](https://github.com/Fission-AI/OpenSpec) schemas across repositories, giving you a single consistent workflow for working with specs wherever they live.
 
-After cloning, run:
+## Install
 
 ```
-make setup
+brew install jamessawle/tap/osch
 ```
 
-This installs the local git hooks via [lefthook](https://github.com/evilmartians/lefthook) so the same checks CI runs (`gofmt`, `go vet`, `golangci-lint`) fire on every commit.
+> **Note:** The Homebrew formula is published by the release pipeline. If the command above fails because the formula doesn't exist yet, the pipeline may not have run for a release — build from source instead (see below).
 
-## Common tasks
+## Build from source
 
-- `make lint` — runs `golangci-lint run` (mirrors CI).
-- `make test` — runs `go test ./...` (mirrors CI).
-- `make build` — runs `go build ./...`.
+Requires a recent [Go](https://go.dev/dl/) toolchain.
+
+```
+go build -o osch ./cmd/osch
+```
+
+This produces an `osch` binary in the current directory.
+
+## Usage
+
+Print the version:
+
+```
+osch version
+```
+
+Print the version as JSON:
+
+```
+osch version --json
+```
+
+## Status
+
+`osch` is pre-1.0 and under active development. Breaking changes are possible between releases until a 1.0 release is tagged.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Released under the [MIT License](LICENSE).
