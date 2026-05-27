@@ -41,7 +41,7 @@ func TestHTTPClientSuccess(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	got, err := c.ListSchemas(context.Background(), source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"})
+	got, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestHTTPClientRepoNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "ghost"})
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "ghost"})
 	assertKind(t, err, source.KindNotFound)
 }
 
@@ -76,7 +76,7 @@ func TestHTTPClientNoSchemasFolder(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"})
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	assertKind(t, err, source.KindNoSchemas)
 }
 
@@ -94,7 +94,7 @@ func TestHTTPClientEmptySchemasFolder(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.ListSchemas(context.Background(), source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"})
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	assertKind(t, err, source.KindEmptySchemas)
 }
 
@@ -104,7 +104,7 @@ func TestHTTPClientNetworkError(t *testing.T) {
 	c := newTestClient(t, srv)
 	srv.Close()
 
-	_, err := c.ListSchemas(context.Background(), source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"})
+	_, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	assertKind(t, err, source.KindNetwork)
 }
 
@@ -118,7 +118,7 @@ func TestHTTPClientContextTimeout(t *testing.T) {
 	c := newTestClient(t, srv)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
-	_, err := c.ListSchemas(ctx, source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"})
+	_, err := c.ListSchemas(ctx, source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
 	assertKind(t, err, source.KindNetwork)
 }
 

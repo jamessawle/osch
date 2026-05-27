@@ -41,7 +41,7 @@ func run(args []string, stdout io.Writer) error {
 		}
 		return printVersion(stdout, jsonOut)
 	case "add":
-		client, err := clientForHost(source.HostGitHub)
+		client, err := clientForProvider(source.ProviderGitHub)
 		if err != nil {
 			return err
 		}
@@ -51,15 +51,15 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-// clientForHost returns the concrete source client for a host. This switch is
-// the single place that knows about concrete host implementations; adding a
-// second host (per ADR 0004) means adding a branch here.
-func clientForHost(host string) (source.Client, error) {
-	switch host {
-	case source.HostGitHub:
+// clientForProvider returns the concrete source client for a provider. This switch is
+// the single place that knows about concrete provider implementations; adding a
+// second provider (per ADR 0004) means adding a branch here.
+func clientForProvider(provider string) (source.Client, error) {
+	switch provider {
+	case source.ProviderGitHub:
 		return github.NewClient(), nil
 	default:
-		return nil, fmt.Errorf("unsupported source host %q", host)
+		return nil, fmt.Errorf("unsupported source provider %q", provider)
 	}
 }
 

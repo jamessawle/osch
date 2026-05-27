@@ -7,7 +7,7 @@ import (
 )
 
 func TestClientErrorMessages(t *testing.T) {
-	ref := Ref{Host: HostGitHub, Owner: "acme", Name: "widgets"}
+	ref := Ref{Provider: ProviderGitHub, Owner: "acme", Name: "widgets"}
 	cases := []struct {
 		name string
 		err  *ClientError
@@ -32,7 +32,7 @@ func TestClientErrorMessages(t *testing.T) {
 
 func TestClientErrorUnwrap(t *testing.T) {
 	underlying := errors.New("boom")
-	err := NetworkError(Ref{Host: HostGitHub, Owner: "a", Name: "b"}, underlying)
+	err := NetworkError(Ref{Provider: ProviderGitHub, Owner: "a", Name: "b"}, underlying)
 	if !errors.Is(err, underlying) {
 		t.Errorf("NetworkError should unwrap to the underlying error")
 	}

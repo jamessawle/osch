@@ -13,8 +13,8 @@ func TestParseRefValid(t *testing.T) {
 	if ref.Owner != "openspec" || ref.Name != "schemas" {
 		t.Errorf("got %+v, want {openspec schemas}", ref)
 	}
-	if ref.Host != HostGitHub {
-		t.Errorf("got host %q, want %q", ref.Host, HostGitHub)
+	if ref.Provider != ProviderGitHub {
+		t.Errorf("got provider %q, want %q", ref.Provider, ProviderGitHub)
 	}
 }
 
@@ -43,7 +43,7 @@ func TestParseRefInvalid(t *testing.T) {
 }
 
 func TestRefString(t *testing.T) {
-	if got := (Ref{Host: HostGitHub, Owner: "a", Name: "b"}).String(); got != "a/b" {
+	if got := (Ref{Provider: ProviderGitHub, Owner: "a", Name: "b"}).String(); got != "a/b" {
 		t.Errorf("Ref.String() = %q, want %q", got, "a/b")
 	}
 }

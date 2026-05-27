@@ -23,7 +23,7 @@ The choices here affect three things: whether `osch` can stay a standalone binar
 - Users without `gh` can opt in by providing a token through the environment. No file-based configuration is introduced.
 - `gh` is treated as an *optional credential source*, not a dependency. Missing `gh`, an unauthenticated `gh`, or a `gh` that errors on credential retrieval are not `osch` errors — they degrade silently to the next step in the fallback chain.
 - The auth resolution runs once per `osch` invocation. The resolved state (token or anonymous) is held for the run; the tool does not re-resolve mid-command.
-- This ADR is specifically about GitHub. Each future host added under 0004 brings its own auth story. The shape — borrow from a host-specific CLI if installed, then env, then anonymous — can repeat per host, but is not promised by this decision.
+- This ADR is specifically about GitHub. Each future provider added under 0004 brings its own auth story. The shape — borrow from a provider-specific CLI if installed, then env, then anonymous — can repeat per provider, but is not promised by this decision.
 
 ## Alternatives Considered
 

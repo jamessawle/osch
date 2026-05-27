@@ -1,6 +1,6 @@
 // Package github is the GitHub implementation of source.Client. It reads
 // schema folders from GitHub repositories via the REST API and maps GitHub's
-// HTTP status codes onto the host-agnostic error vocabulary in internal/source.
+// HTTP status codes onto the provider-agnostic error vocabulary in internal/source.
 package github
 
 import (

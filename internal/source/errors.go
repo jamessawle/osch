@@ -34,7 +34,7 @@ func (e *ClientError) Error() string {
 	case KindEmptySchemas:
 		return fmt.Sprintf("repository %q has an empty schemas/ folder", e.Ref)
 	case KindNetwork:
-		return fmt.Sprintf("could not reach %s for %q: %v", hostDisplayName(e.Ref.Host), e.Ref, e.Err)
+		return fmt.Sprintf("could not reach %s for %q: %v", providerDisplayName(e.Ref.Provider), e.Ref, e.Err)
 	default:
 		return fmt.Sprintf("upstream error for %q: %v", e.Ref, e.Err)
 	}
@@ -43,14 +43,14 @@ func (e *ClientError) Error() string {
 // Unwrap exposes the underlying cause so errors.Is/As keep working.
 func (e *ClientError) Unwrap() error { return e.Err }
 
-// hostDisplayName maps a host identifier to its human-friendly name for use in
-// messages. Unknown hosts are shown verbatim.
-func hostDisplayName(host string) string {
-	switch host {
-	case HostGitHub:
+// providerDisplayName maps a provider identifier to its human-friendly name for use in
+// messages. Unknown providers are shown verbatim.
+func providerDisplayName(provider string) string {
+	switch provider {
+	case ProviderGitHub:
 		return "GitHub"
 	default:
-		return host
+		return provider
 	}
 }
 
@@ -69,7 +69,7 @@ func EmptySchemasError(ref Ref) *ClientError {
 	return &ClientError{Kind: KindEmptySchemas, Ref: ref}
 }
 
-// NetworkError wraps a transport-level failure contacting the host.
+// NetworkError wraps a transport-level failure contacting the provider.
 func NetworkError(ref Ref, err error) *ClientError {
 	return &ClientError{Kind: KindNetwork, Ref: ref, Err: err}
 }

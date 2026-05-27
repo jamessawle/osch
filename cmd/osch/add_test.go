@@ -62,7 +62,7 @@ func TestRunAddInvalidRepoArg(t *testing.T) {
 }
 
 func TestRunAddUpstreamErrors(t *testing.T) {
-	ref := source.Ref{Host: source.HostGitHub, Owner: "acme", Name: "widgets"}
+	ref := source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"}
 	cases := []struct {
 		name string
 		err  error
