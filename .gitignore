@@ -36,3 +36,4 @@ docs/superpowers/
 
 # Claude Code — local-only per-user overrides
 .claude/settings.local.json
+
