@@ -6,13 +6,13 @@ follows. For how the codebase is structured and why decisions were made, see
 
 ## Commit messages
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/). The
-exact rules enforced by this repo — types, scope, header length — are recorded
-in [ADR 0008](docs/adr/0008-conventional-commits-enforcement.md) and checked
-automatically:
+We follow [Conventional Commits](https://www.conventionalcommits.org/). Two
+layers of enforcement keep commits and PR titles in line with the convention:
 
-- A `commit-msg` hook (installed by `make setup`) rejects local commits whose
-  header doesn't match. See `scripts/check-commit-msg`.
+- A `commit-msg` hook (installed by `make setup`) runs
+  [`conform`](https://github.com/siderolabs/conform) against the message and
+  rejects commits whose header doesn't match. The configuration lives in
+  `.conform.yaml`.
 - A GitHub Action (`.github/workflows/pr-title.yml`) fails any PR whose title
   doesn't match. Because the repo squash-merges, the PR title becomes the
   commit on `main`.
@@ -39,7 +39,7 @@ automatically:
 | `test`     | Adding or correcting tests.                                    |
 | `ci`       | Changes to CI configuration or workflows.                      |
 | `build`    | Changes to the build system, release tooling, or dependencies. |
-| `perf`     | A change that improves performance.                            |
+| `revert`   | Reverts a previous commit.                                     |
 
 ### One logical change per commit
 

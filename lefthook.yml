@@ -1,7 +1,7 @@
 commit-msg:
   commands:
     conventional-commits:
-      run: bash scripts/check-commit-msg {1}
+      run: go tool conform enforce --commit-msg-file {1}
 
 pre-commit:
   parallel: true
