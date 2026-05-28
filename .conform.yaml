@@ -5,6 +5,12 @@ policies:
         length: 72
         invalidLastCharacters: .
       conventional:
+        # Scopes are optional; when present, any non-empty scope is permitted.
+        # Matches the PR-title CI check (which has no allowlist) and
+        # CONTRIBUTING.md's "use a scope when it usefully narrows the change".
+        # The conform `scopes` field is regex-matched, so `.*` means "any".
+        scopes:
+          - ".*"
         types:
           - feat
           - fix
