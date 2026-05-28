@@ -32,7 +32,7 @@ This produces an `osch` binary in the current directory.
 osch add <owner>/<repo>
 ```
 
-Resolves the upstream's default-branch HEAD, copies every file under `schemas/<name>/` into `openspec/schemas/<name>/` in the current repository, and writes a `.osch.json` manifest pinning the upstream commit and a SHA-256 of each installed file.
+Resolves the upstream's default-branch HEAD, copies every file under `schemas/<name>/` into `openspec/schemas/<name>/` in the current repository, and writes a `.osch.json` manifest alongside each installed schema pinning the upstream commit and a SHA-256 of each file.
 
 Only upstreams that expose a single schema directory under `schemas/` are supported today; multi-schema upstreams will follow.
 
