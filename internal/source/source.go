@@ -9,8 +9,16 @@ package source
 
 import "context"
 
-// Client reads the list of schema files under schemas/ at the default branch
-// HEAD of a source reference.
+// Client reads schema folders from an upstream repository at the default branch
+// HEAD commit. Implementations live under internal/<provider>.
 type Client interface {
-	ListSchemas(ctx context.Context, ref Ref) ([]string, error)
+	// ListSchemas resolves the default branch HEAD commit of ref and returns the
+	// names of schema directories under schemas/ at that commit, together with the
+	// resolved SHA.
+	ListSchemas(ctx context.Context, ref Ref) (sha string, names []string, err error)
+
+	// FetchSchemaFiles fetches every file under schemas/<name>/ at the given commit
+	// SHA. The returned map is keyed by forward-slash relative path within the
+	// schema folder, so the manifest written from it is stable across platforms.
+	FetchSchemaFiles(ctx context.Context, ref Ref, sha, name string) (map[string][]byte, error)
 }

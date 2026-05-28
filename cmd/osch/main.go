@@ -1,17 +1,11 @@
-// Package main implements the osch CLI.
+// Package main is the osch CLI entrypoint. All command logic lives in
+// cmd/osch/cmd so this file stays a thin wrapper that wires ldflags-injected
+// build metadata into the Cobra command tree.
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"os"
+import "github.com/jamessawle/osch/cmd/osch/cmd"
 
-	"github.com/jamessawle/osch/internal/github"
-	"github.com/jamessawle/osch/internal/source"
-)
-
+// Build identity wired by goreleaser via -X main.{version,commit,date}.
 var (
 	version = "dev"
 	commit  = "none"
@@ -19,77 +13,8 @@ var (
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-func run(args []string, stdout io.Writer) error {
-	if len(args) == 0 {
-		return printVersion(stdout, false)
-	}
-	switch args[0] {
-	case "version":
-		jsonOut := false
-		for _, a := range args[1:] {
-			if a == "--json" {
-				jsonOut = true
-			} else {
-				return fmt.Errorf("unknown argument: %s", a)
-			}
-		}
-		return printVersion(stdout, jsonOut)
-	case "add":
-		client, err := clientForProvider(source.ProviderGitHub)
-		if err != nil {
-			return err
-		}
-		return runAdd(context.Background(), client, args[1:], stdout)
-	default:
-		return fmt.Errorf("unknown command: %s", args[0])
-	}
-}
-
-// clientForProvider returns the concrete source client for a provider. This switch is
-// the single place that knows about concrete provider implementations; adding a
-// second provider (per ADR 0004) means adding a branch here.
-func clientForProvider(provider string) (source.Client, error) {
-	switch provider {
-	case source.ProviderGitHub:
-		return github.NewClient(), nil
-	default:
-		return nil, fmt.Errorf("unsupported source provider %q", provider)
-	}
-}
-
-// runAdd validates the repo argument and reports the upstream schemas/ folder.
-// Every failure is returned as a friendly, non-stacktrace error so main can
-// print it and exit non-zero.
-func runAdd(ctx context.Context, client source.Client, args []string, stdout io.Writer) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: osch add <user/repo>")
-	}
-	ref, err := source.ParseRef(args[0])
-	if err != nil {
-		return err
-	}
-	names, err := client.ListSchemas(ctx, ref)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(stdout, "found %d schema(s) in %s\n", len(names), ref)
-	return err
-}
-
-func printVersion(w io.Writer, asJSON bool) error {
-	if asJSON {
-		return json.NewEncoder(w).Encode(map[string]string{
-			"version": version,
-			"commit":  commit,
-			"date":    date,
-		})
-	}
-	_, err := fmt.Fprintf(w, "osch %s (commit %s, built %s)\n", version, commit, date)
-	return err
+	cmd.Version = version
+	cmd.Commit = commit
+	cmd.Date = date
+	cmd.Execute()
 }
