@@ -11,6 +11,9 @@ CLI for managing OpenSpec schemas across repos. Public OSS, MIT.
 ## Working principle
 If an acceptance criterion is unclear, stop and comment on the issue rather than guess.
 
+## Documentation
+When adding or changing a user-facing command, update `README.md` under Usage in the same PR.
+
 ## PR descriptions
 When opening a pull request (either manually or via the agent loop), use the
 `/pr-management:write-pr-description` skill to generate the body. The skill

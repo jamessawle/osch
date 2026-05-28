@@ -131,8 +131,10 @@ process_issue() {
         brief_block="$(cat <<EOF
 
 
-Agent brief (authoritative specification — treat this as the contract; the issue body above is supporting context):
+Agent brief (authoritative specification):
 ${brief}
+
+The agent brief is the exclusive source of truth. Where the brief and the issue body disagree on any specific value (filenames, exact strings, error rules, etc.), the brief wins without exception. Do not copy values from the body that contradict the brief.
 EOF
 )"
     fi
@@ -152,6 +154,7 @@ Instructions:
 - Make the edits the issue requires.
 - Run any relevant local checks (build, tests, gofmt, vet).
 - Commit your changes with Conventional Commit messages (e.g. 'feat:', 'fix:', 'chore:', 'docs:'). Reference the issue with 'Refs #${n}' in the commit body.
+- Before your final commit, walk the brief's \`Acceptance criteria\` list AC-by-AC. For each item, identify the specific line of code or test that satisfies it. If you can't, the item is not yet done.
 - DO NOT push the branch and DO NOT open a pull request — the calling script will handle that.
 - If an acceptance criterion is unclear, stop without committing.
 EOF
