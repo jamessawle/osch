@@ -19,7 +19,7 @@ func TestListNoSchemasDir(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	if !strings.Contains(buf.String(), "no schemas installed") {
+	if !strings.Contains(buf.String(), "No OpenSpec schemas installed") {
 		t.Errorf("expected no-schemas message, got %q", buf.String())
 	}
 }

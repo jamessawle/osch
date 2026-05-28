@@ -36,6 +36,20 @@ Resolves the upstream's default-branch HEAD, copies every file under `schemas/<n
 
 Only upstreams that expose a single schema directory under `schemas/` are supported today; multi-schema upstreams will follow.
 
+### List installed schemas
+
+```
+osch list
+```
+
+Scans `openspec/schemas/` in the current directory and prints a table with one row per installed schema:
+
+- `NAME` — the schema folder name.
+- `ACTIVE` — marked with `*` when the schema name matches the top-level `schema:` key in `openspec/config.yaml`.
+- `TRACKED` — `yes` when the folder contains a `.osch.json` manifest (i.e. was installed by `osch`), otherwise `no`.
+
+If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
+
 ## Status
 
 `osch` is pre-1.0 and under active development. Breaking changes are possible between releases until a 1.0 release is tagged.

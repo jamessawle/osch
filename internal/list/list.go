@@ -18,22 +18,24 @@ import (
 
 // configFile is the OpenSpec-owned project config; the top-level `schema` key
 // names the currently-active schema.
-const configFile = "config.yml"
+const configFile = "config.yaml"
+
+const emptyMessage = "No OpenSpec schemas installed"
 
 // List scans workingDir/openspec/schemas/ and writes a NAME/ACTIVE/TRACKED
-// table to stdout. A missing schemas directory is not an error.
+// table to stdout. Missing or empty schemas directory prints emptyMessage and
+// returns nil. Only fs.ErrNotExist on either openspec/schemas/ or the OpenSpec
+// config file is treated as a soft failure; every other I/O error is returned.
 func List(workingDir string, stdout io.Writer) error {
 	schemasDir := filepath.Join(workingDir, "openspec", "schemas")
 	entries, err := os.ReadDir(schemasDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		_, err := fmt.Fprintln(stdout, "no schemas installed")
+		_, err := fmt.Fprintln(stdout, emptyMessage)
 		return err
 	}
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", schemasDir, err)
 	}
-
-	active := readActiveSchema(filepath.Join(workingDir, "openspec", configFile))
 
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -41,7 +43,16 @@ func List(workingDir string, stdout io.Writer) error {
 			names = append(names, e.Name())
 		}
 	}
+	if len(names) == 0 {
+		_, err := fmt.Fprintln(stdout, emptyMessage)
+		return err
+	}
 	sort.Strings(names)
+
+	active, err := readActiveSchema(filepath.Join(workingDir, "openspec", configFile))
+	if err != nil {
+		return err
+	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED"); err != nil {
@@ -64,30 +75,30 @@ func List(workingDir string, stdout io.Writer) error {
 }
 
 // readActiveSchema reads the top-level `schema` key from path. A missing file
-// or unparseable contents return an empty string: no schema is marked active,
-// which the acceptance criteria treat as a non-error.
-func readActiveSchema(path string) string {
+// or malformed YAML returns ("", nil) — no schema is marked active and that
+// is not an error. Any other I/O error (permission denied, etc.) is returned
+// so callers can fail loudly.
+func readActiveSchema(path string) (string, error) {
 	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("reading %s: %w", path, err)
 	}
 	var cfg struct {
 		Schema string `yaml:"schema"`
 	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return ""
+		return "", nil
 	}
-	return cfg.Schema
+	return cfg.Schema, nil
 }
 
-// isTracked reports whether schemaDir contains a readable per-schema manifest.
-// Presence + readability is the signal; the manifest body is not validated in
-// this slice.
+// isTracked reports whether schemaDir contains a per-schema manifest. The
+// manifest body is not inspected at this layer; downstream commands that need
+// the manifest contents will surface any corruption themselves.
 func isTracked(schemaDir string) bool {
-	f, err := os.Open(filepath.Join(schemaDir, install.ManifestFile))
-	if err != nil {
-		return false
-	}
-	_ = f.Close()
-	return true
+	_, err := os.Stat(filepath.Join(schemaDir, install.ManifestFile))
+	return err == nil
 }
