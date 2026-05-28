@@ -12,13 +12,9 @@ import (
 	"sort"
 	"text/tabwriter"
 
+	"github.com/jamessawle/osch/internal/config"
 	"github.com/jamessawle/osch/internal/install"
-	"gopkg.in/yaml.v3"
 )
-
-// configFile is the OpenSpec-owned project config; the top-level `schema` key
-// names the currently-active schema.
-const configFile = "config.yaml"
 
 const emptyMessage = "No OpenSpec schemas installed"
 
@@ -49,7 +45,7 @@ func List(workingDir string, stdout io.Writer) error {
 	}
 	sort.Strings(names)
 
-	active, err := readActiveSchema(filepath.Join(workingDir, "openspec", configFile))
+	active, _, err := config.ReadSchema(config.Path(workingDir))
 	if err != nil {
 		return err
 	}
@@ -72,27 +68,6 @@ func List(workingDir string, stdout io.Writer) error {
 		}
 	}
 	return tw.Flush()
-}
-
-// readActiveSchema reads the top-level `schema` key from path. A missing file
-// or malformed YAML returns ("", nil) — no schema is marked active and that
-// is not an error. Any other I/O error (permission denied, etc.) is returned
-// so callers can fail loudly.
-func readActiveSchema(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, err)
-	}
-	var cfg struct {
-		Schema string `yaml:"schema"`
-	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return "", nil
-	}
-	return cfg.Schema, nil
 }
 
 // isTracked reports whether schemaDir contains a per-schema manifest. The

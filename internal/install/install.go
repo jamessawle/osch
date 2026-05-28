@@ -39,34 +39,36 @@ type Manifest struct {
 	Files         map[string]string `json:"files"`
 }
 
-// Add installs a single schema from ref into workingDir/openspec/schemas/<name>/.
-// This slice implements the happy path for an upstream repo with exactly one
-// schema directory under schemas/; multiple schemas or an existing local target
-// produce a friendly error rather than a partial install.
-func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir string, stdout io.Writer) error {
+// Add installs a single schema from ref into workingDir/openspec/schemas/<name>/
+// and returns the installed schema's name so callers can drive follow-on steps
+// (e.g. activation) without re-deriving it. This slice implements the happy
+// path for an upstream repo with exactly one schema directory under schemas/;
+// multiple schemas or an existing local target produce a friendly error rather
+// than a partial install.
+func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir string, stdout io.Writer) (string, error) {
 	sha, names, err := client.ListSchemas(ctx, ref)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(names) != 1 {
-		return fmt.Errorf("repository %s contains %d schemas; multi-schema installs are not supported yet", ref, len(names))
+		return "", fmt.Errorf("repository %s contains %d schemas; multi-schema installs are not supported yet", ref, len(names))
 	}
 	name := names[0]
 	targetDir := filepath.Join(workingDir, "openspec", "schemas", name)
 	if _, err := os.Stat(targetDir); err == nil {
-		return fmt.Errorf("refusing to overwrite existing schema folder %s (use osch update to refresh)", targetDir)
+		return "", fmt.Errorf("refusing to overwrite existing schema folder %s (use osch update to refresh)", targetDir)
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("checking target folder %s: %w", targetDir, err)
+		return "", fmt.Errorf("checking target folder %s: %w", targetDir, err)
 	}
 
 	files, err := client.FetchSchemaFiles(ctx, ref, sha, name)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	hashes, err := writeFiles(targetDir, files)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	manifest := Manifest{
@@ -78,11 +80,13 @@ func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir s
 		Files:         hashes,
 	}
 	if err := writeManifest(targetDir, manifest); err != nil {
-		return err
+		return "", err
 	}
 
-	_, err = fmt.Fprintf(stdout, "installed %s from %s @ %s\n", name, ref, sha)
-	return err
+	if _, err := fmt.Fprintf(stdout, "installed %s from %s @ %s\n", name, ref, sha); err != nil {
+		return "", err
+	}
+	return name, nil
 }
 
 // writeFiles writes each fetched file under targetDir and returns the SHA-256

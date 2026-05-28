@@ -29,10 +29,12 @@ This produces an `osch` binary in the current directory.
 ### Add a schema from an upstream repository
 
 ```
-osch add <owner>/<repo>
+osch add <owner>/<repo> [--activate | --no-activate]
 ```
 
 Resolves the upstream's default-branch HEAD, copies every file under `schemas/<name>/` into `openspec/schemas/<name>/` in the current repository, and writes a `.osch.json` manifest alongside each installed schema pinning the upstream commit and a SHA-256 of each file.
+
+After a successful install, `osch` offers to set the new schema as active by writing the top-level `schema:` key in `openspec/config.yaml`. Interactively (stdin is a TTY) it prompts `y/N`; when stdin is not a TTY the prompt is skipped silently. `--activate` activates without prompting and `--no-activate` skips both prompt and activation; passing both is an error. `osch` never creates `openspec/config.yaml` — if the file is absent, activation is skipped with a message and the install itself still succeeds. The writer round-trips the file through a YAML decode/encode cycle and so does not preserve comments, blank lines, or key order; other top-level keys' values are kept.
 
 Only upstreams that expose a single schema directory under `schemas/` are supported today; multi-schema upstreams will follow.
 
