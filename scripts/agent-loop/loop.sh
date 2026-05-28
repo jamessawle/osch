@@ -223,11 +223,42 @@ EOF
     awk 'NF{p=1} p' "$pr_body_file" | awk 'BEGIN{RS=""; FS=""} {print}' > "${pr_body_file}.tmp" && mv "${pr_body_file}.tmp" "$pr_body_file"
     printf '\n\nCloses #%s\n' "$n" >> "$pr_body_file"
 
+    # Generate the PR title following Conventional Commits. The title lands on
+    # main as the squashed commit subject and is checked by the title-lint CI,
+    # so using the raw issue title (which is not type-prefixed) would always
+    # fail the check.
+    log "Generating PR title (Conventional Commits)"
+    local pr_title_file
+    pr_title_file="$(mktemp)"
+
+    local title_prompt
+    title_prompt="$(cat <<EOF
+Generate a single Conventional Commits PR title for the commits on the current branch (compared to origin/main). The PR implements GitHub issue #${n}: "${title}".
+
+Requirements:
+- Format: type(scope)?: subject  (scope optional)
+- Allowed types are listed in CONTRIBUTING.md at the repo root — read it.
+- Subject in lowercase, no trailing period, no issue number suffix.
+- Hard cap at 72 characters for the whole header.
+
+Output ONLY the title text, a single line, with no preamble or commentary.
+EOF
+)"
+
+    local pr_title
+    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$AGENT_SETTINGS" "$title_prompt") >"$pr_title_file" 2>/dev/null; then
+        log "WARN: PR title generation failed; falling back to chore-prefixed issue title"
+        printf 'chore: %s\n' "$title" > "$pr_title_file"
+    fi
+    pr_title="$(tr -d '\r' < "$pr_title_file" | awk 'NF{print; exit}')"
+    rm -f "$pr_title_file"
+    [ -z "$pr_title" ] && pr_title="chore: ${title}"
+
     log "Opening PR for #${n}"
     if ! gh pr create \
             --head "$branch" \
             --base main \
-            --title "${title} (#${n})" \
+            --title "$pr_title" \
             --body-file "$pr_body_file" \
             --label "$LABEL_AUTHORED" >/dev/null; then
         log "gh pr create failed for #${n}; marking failed"
