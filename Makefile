@@ -1,10 +1,10 @@
 .PHONY: setup lint test build
 
 setup:
-	lefthook install
+	go tool lefthook install
 
 lint:
-	golangci-lint run
+	go tool golangci-lint run
 
 test:
 	go test ./...
