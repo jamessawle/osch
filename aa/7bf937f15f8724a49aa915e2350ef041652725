@@ -1,0 +1,9 @@
+CONTEXT.md
+  ai_agent 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "aa7bf937f15f8724a49aa915e2350ef041652725",
+  "prompts": {}
+}
