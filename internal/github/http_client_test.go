@@ -11,10 +11,11 @@ import (
 	"github.com/jamessawle/osch/internal/source"
 )
 
-// newTestClient points an HTTPClient at a test server.
+// newTestClient points an HTTPClient at a test server. It resolves to the
+// anonymous token so tests never read the environment or spawn gh.
 func newTestClient(t *testing.T, srv *httptest.Server) *HTTPClient {
 	t.Helper()
-	c := NewHTTPClient()
+	c := newHTTPClient([]TokenSource{StaticTokenSource{Value: ""}})
 	base, err := url.Parse(srv.URL)
 	if err != nil {
 		t.Fatalf("parse server url: %v", err)
@@ -47,6 +48,63 @@ func TestHTTPClientSuccess(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "a.json" || got[1] != "b.json" {
 		t.Errorf("got %v, want [a.json b.json]", got)
+	}
+}
+
+func TestHTTPClientSendsAuthorizationWhenTokenResolved(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		switch r.URL.Path {
+		case "/repos/acme/widgets":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"full_name":"acme/widgets"}`))
+		case "/repos/acme/widgets/contents/schemas":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"type":"file","name":"a.json"}]`))
+		}
+	}))
+	defer srv.Close()
+
+	c := newHTTPClient([]TokenSource{StaticTokenSource{Value: "secret-token"}})
+	base, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse server url: %v", err)
+	}
+	c.BaseURL = base
+	c.HTTP = srv.Client()
+
+	if _, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer secret-token" {
+		t.Errorf("Authorization header = %q, want %q", gotAuth, "Bearer secret-token")
+	}
+}
+
+func TestHTTPClientOmitsAuthorizationWhenAnonymous(t *testing.T) {
+	var sawAuthHeader bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := r.Header["Authorization"]; ok {
+			sawAuthHeader = true
+		}
+		switch r.URL.Path {
+		case "/repos/acme/widgets":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"full_name":"acme/widgets"}`))
+		case "/repos/acme/widgets/contents/schemas":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"type":"file","name":"a.json"}]`))
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	if _, err := c.ListSchemas(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sawAuthHeader {
+		t.Error("anonymous client sent an Authorization header")
 	}
 }
 

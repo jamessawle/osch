@@ -22,6 +22,10 @@ const defaultBaseURL = "https://api.github.com"
 type HTTPClient struct {
 	BaseURL *url.URL
 	HTTP    *http.Client
+
+	// token is the GitHub token resolved once at construction (empty means
+	// anonymous). get() sends it as a Bearer credential when non-empty.
+	token string
 }
 
 // NewClient returns the GitHub source.Client pointed at the public GitHub API.
@@ -30,12 +34,22 @@ func NewClient() source.Client {
 }
 
 // NewHTTPClient returns an HTTPClient pointed at the public GitHub API with a
-// sensible request timeout.
+// sensible request timeout. It resolves a GitHub token once, via the default
+// chain (GITHUB_TOKEN, then gh CLI, then anonymous), and caches it on the
+// client for the lifetime of the invocation.
 func NewHTTPClient() *HTTPClient {
+	return newHTTPClient(defaultTokenSources())
+}
+
+// newHTTPClient builds an HTTPClient resolving its token from the given chain.
+// It is the seam tests use to inject fake token sources rather than reading the
+// environment or spawning gh.
+func newHTTPClient(sources []TokenSource) *HTTPClient {
 	base, _ := url.Parse(defaultBaseURL)
 	return &HTTPClient{
 		BaseURL: base,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
+		token:   resolveToken(context.Background(), sources),
 	}
 }
 
@@ -100,6 +114,9 @@ func (c *HTTPClient) get(ctx context.Context, path string) (int, []byte, error) 
 		return 0, nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
