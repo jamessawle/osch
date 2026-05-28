@@ -1,0 +1,17 @@
+docs/adr/0008-conventional-commits-enforcement.md
+  ai_agent 1-35
+scripts/check-commit-msg
+  ai_agent 1-57
+.github/workflows/pr-title.yml
+  ai_agent 1-36
+CONTRIBUTING.md
+  ai_agent 9-12,14-24,26-30,41-42
+lefthook.yml
+  ai_agent 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "81d39da1687d10b80384982172a76a5ad184ec63",
+  "prompts": {}
+}
