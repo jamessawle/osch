@@ -1,8 +1,9 @@
-// Package config reads and writes the OpenSpec project config file
-// (`openspec/config.yaml`). Only the top-level `schema` key is meaningful to
+// Package openspec contains helpers for the OpenSpec project layout that
+// `osch` manages around — primarily reading and writing
+// `openspec/config.yaml`. Only the top-level `schema` key is meaningful to
 // osch; other keys are preserved on write but otherwise opaque. osch never
 // creates the file — that remains OpenSpec's responsibility.
-package config
+package openspec
 
 import (
 	"errors"

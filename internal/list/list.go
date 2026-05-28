@@ -12,8 +12,8 @@ import (
 	"sort"
 	"text/tabwriter"
 
-	"github.com/jamessawle/osch/internal/config"
 	"github.com/jamessawle/osch/internal/install"
+	"github.com/jamessawle/osch/internal/openspec"
 )
 
 const emptyMessage = "No OpenSpec schemas installed"
@@ -45,7 +45,7 @@ func List(workingDir string, stdout io.Writer) error {
 	}
 	sort.Strings(names)
 
-	active, _, err := config.ReadSchema(config.Path(workingDir))
+	active, _, err := openspec.ReadSchema(openspec.Path(workingDir))
 	if err != nil {
 		return err
 	}

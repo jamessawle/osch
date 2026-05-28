@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jamessawle/osch/internal/config"
 	"github.com/jamessawle/osch/internal/github"
 	"github.com/jamessawle/osch/internal/install"
+	"github.com/jamessawle/osch/internal/openspec"
 	"github.com/jamessawle/osch/internal/source"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -81,8 +81,8 @@ func runActivation(workingDir, schemaName string, mode activateMode, stdin io.Re
 	if mode == activateNo {
 		return nil
 	}
-	cfgPath := config.Path(workingDir)
-	current, exists, err := config.ReadSchema(cfgPath)
+	cfgPath := openspec.Path(workingDir)
+	current, exists, err := openspec.ReadSchema(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func runActivation(workingDir, schemaName string, mode activateMode, stdin io.Re
 		// don't print spurious output, but surface the skip when the user
 		// (or interactive prompt) actually asked for activation.
 		if mode == activateYes || stdinIsTTY() {
-			if _, err := fmt.Fprintf(stdout, "openspec/%s not found; skipping activation\n", config.Filename); err != nil {
+			if _, err := fmt.Fprintf(stdout, "openspec/%s not found; skipping activation\n", openspec.Filename); err != nil {
 				return err
 			}
 		}
@@ -114,9 +114,9 @@ func runActivation(workingDir, schemaName string, mode activateMode, stdin io.Re
 			return nil
 		}
 	}
-	if err := config.WriteSchema(cfgPath, schemaName); err != nil {
+	if err := openspec.WriteSchema(cfgPath, schemaName); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			_, ferr := fmt.Fprintf(stdout, "openspec/%s not found; skipping activation\n", config.Filename)
+			_, ferr := fmt.Fprintf(stdout, "openspec/%s not found; skipping activation\n", openspec.Filename)
 			return ferr
 		}
 		return err
