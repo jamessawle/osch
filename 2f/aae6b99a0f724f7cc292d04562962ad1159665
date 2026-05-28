@@ -1,0 +1,35 @@
+cmd/osch/cmd/add.go
+  ai_agent 1-46
+internal/install/install.go
+  ai_agent 1-121
+cmd/osch/cmd/add_test.go
+  ai_agent 1-98
+cmd/osch/main_test.go
+  ai_agent 3-5
+cmd/osch/cmd/version.go
+  ai_agent 1-43
+internal/github/http_client_test.go
+  ai_agent 8,29-33,37-40,42-45,47,52-56,60,64-68,78-80,82,95,111-113,115,121,137,145-147,156,164-166,174,184,198,202-236
+cmd/osch/cmd/testutil_test.go
+  ai_agent 1-25
+cmd/osch/add_test.go
+  ai_agent 3-4
+cmd/osch/main.go
+  ai_agent 1-3,6,8,16-19
+internal/source/source.go
+  ai_agent 12-13,15-23
+cmd/osch/cmd/root.go
+  ai_agent 1-34
+cmd/osch/cmd/version_test.go
+  ai_agent 1-48
+internal/github/http_client.go
+  ai_agent 56-65,70,73-77,79,82,85-107,110,112,115,118,123,128,133,135,138-148,150-153,155,157-177,179-180,182-189,201-235
+internal/install/install_test.go
+  ai_agent 1-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "2faae6b99a0f724f7cc292d04562962ad1159665",
+  "prompts": {}
+}
