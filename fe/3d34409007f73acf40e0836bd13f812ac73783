@@ -1,0 +1,11 @@
+scripts/agent-loop/loop.sh
+  ai_agent 134,136-137,157
+CLAUDE.md
+  ai_agent 14-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "fe3d34409007f73acf40e0836bd13f812ac73783",
+  "prompts": {}
+}
