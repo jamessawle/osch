@@ -6,12 +6,28 @@ follows. For how the codebase is structured and why decisions were made, see
 
 ## Commit messages
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/) — see
-the spec for the format, allowed structure, and general guidance.
+We follow [Conventional Commits](https://www.conventionalcommits.org/). Two
+layers of enforcement keep commits and PR titles in line with the convention:
+
+- A `commit-msg` hook (installed by `make setup`) runs
+  [`conform`](https://github.com/siderolabs/conform) against the message and
+  rejects commits whose header doesn't match. The configuration lives in
+  `.conform.yaml`.
+- A GitHub Action (`.github/workflows/pr-title.yml`) fails any PR whose title
+  doesn't match. Because the repo squash-merges, the PR title becomes the
+  commit on `main`.
+
+### Header format
+
+```
+<type>(<optional-scope>)!?: <subject>
+```
+
+- **Header length:** 72 characters max.
+- **Scope:** optional. Use one when it usefully narrows the change.
+- **`!`:** append after the type/scope to flag a breaking change.
 
 ### Types we use
-
-The spec is permissive about types; this project uses the following subset:
 
 | Type       | Use for                                                        |
 | ---------- | -------------------------------------------------------------- |
@@ -22,6 +38,8 @@ The spec is permissive about types; this project uses the following subset:
 | `refactor` | A code change that neither fixes a bug nor adds a feature.     |
 | `test`     | Adding or correcting tests.                                    |
 | `ci`       | Changes to CI configuration or workflows.                      |
+| `build`    | Changes to the build system, release tooling, or dependencies. |
+| `revert`   | Reverts a previous commit.                                     |
 
 ### One logical change per commit
 

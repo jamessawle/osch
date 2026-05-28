@@ -1,0 +1,18 @@
+policies:
+  - type: commit
+    spec:
+      header:
+        length: 72
+        invalidLastCharacters: .
+      conventional:
+        types:
+          - feat
+          - fix
+          - chore
+          - docs
+          - refactor
+          - test
+          - ci
+          - build
+          - revert
+        descriptionLength: 64
