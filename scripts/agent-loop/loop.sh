@@ -254,6 +254,21 @@ EOF
     rm -f "$pr_title_file"
     [ -z "$pr_title" ] && pr_title="chore: ${title}"
 
+    # Validate the generated title against the same conform config the
+    # commit-msg hook uses. LLM output is stochastic; even a correct prompt
+    # occasionally drifts (the agent may treat an issue title like
+    # "osch list: ..." as already type-prefixed, or append "(#NN)" despite
+    # being told not to). Falling back to a guaranteed-valid title is safer
+    # than shipping one that fails the merge gate.
+    local title_check_file
+    title_check_file="$(mktemp)"
+    printf '%s\n' "$pr_title" > "$title_check_file"
+    if ! (cd "$worktree" && go tool conform enforce --commit-msg-file "$title_check_file") >/dev/null 2>&1; then
+        log "WARN: generated title \"$pr_title\" failed conform; falling back to chore-prefixed issue title"
+        pr_title="chore: ${title}"
+    fi
+    rm -f "$title_check_file"
+
     log "Opening PR for #${n}"
     if ! gh pr create \
             --head "$branch" \
