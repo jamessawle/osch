@@ -52,6 +52,16 @@ Scans `openspec/schemas/` in the current directory and prints a table with one r
 
 If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
 
+### Remove an installed schema
+
+```
+osch remove <schema> [--yes]
+```
+
+Deletes `openspec/schemas/<schema>/` recursively from the current directory, whether or not the schema was originally installed by `osch add` (the `.osch.json` manifest is incidental). Interactively (stdin is a TTY) it prompts `y/N`; `--yes` skips the prompt. When stdin is not a TTY and `--yes` is not set the command aborts rather than silently proceeding. If the folder does not exist, the command exits non-zero with a clear message. The schema argument must be a plain folder name — path separators and `..` are rejected.
+
+Clearing the active key in `openspec/config.yaml` when the removed schema is the active one is not yet implemented.
+
 ## Status
 
 `osch` is pre-1.0 and under active development. Breaking changes are possible between releases until a 1.0 release is tagged.
