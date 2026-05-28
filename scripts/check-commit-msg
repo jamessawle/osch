@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Validate that a commit message header follows Conventional Commits.
+#
+# Usage: check-commit-msg <path-to-commit-msg-file>
+#
+# Source of truth for the allowed types and length limit:
+# docs/adr/0008-conventional-commits-enforcement.md and CONTRIBUTING.md.
+
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: $0 <commit-msg-file>" >&2
+  exit 2
+fi
+
+msg_file="$1"
+
+# First non-empty, non-comment line is the header.
+header="$(grep -v '^#' "$msg_file" | sed '/^$/d' | head -n 1 || true)"
+
+# Allow merge / revert / fixup / squash commits through unchanged — git
+# generates these and they aren't user-authored subject lines.
+case "$header" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*)
+    exit 0
+    ;;
+esac
+
+if [ -z "$header" ]; then
+  echo "commit-msg: empty commit message" >&2
+  exit 1
+fi
+
+types='feat|fix|chore|docs|refactor|test|ci|build|perf'
+pattern="^(${types})(\([A-Za-z0-9._/-]+\))?(!)?: .+$"
+
+if ! printf '%s' "$header" | grep -Eq "$pattern"; then
+  cat >&2 <<EOF
+commit-msg: header does not match Conventional Commits.
+
+  Got:      $header
+
+  Expected: <type>(optional-scope)!?: <subject>
+  Types:    feat, fix, chore, docs, refactor, test, ci, build, perf
+
+See CONTRIBUTING.md and docs/adr/0008-conventional-commits-enforcement.md.
+EOF
+  exit 1
+fi
+
+# Header length limit (matches the PR-title workflow's 72-char cap).
+header_len=${#header}
+if [ "$header_len" -gt 72 ]; then
+  echo "commit-msg: header is $header_len characters; limit is 72." >&2
+  echo "  $header" >&2
+  exit 1
+fi

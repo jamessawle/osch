@@ -1,3 +1,8 @@
+commit-msg:
+  commands:
+    conventional-commits:
+      run: bash scripts/check-commit-msg {1}
+
 pre-commit:
   parallel: true
   commands:
