@@ -46,8 +46,12 @@ func TestAddSingleSchemaHappyPath(t *testing.T) {
 	}
 	workDir := t.TempDir()
 	var buf bytes.Buffer
-	if err := Add(context.Background(), client, ref(), workDir, &buf); err != nil {
+	name, err := Add(context.Background(), client, ref(), workDir, &buf)
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "widget" {
+		t.Errorf("Add returned name %q, want widget", name)
 	}
 
 	for rel, want := range client.files {
@@ -103,7 +107,7 @@ func TestAddRefusesWhenTargetExists(t *testing.T) {
 	}
 	client := &fakeClient{sha: "deadbeef", names: []string{"widget"}, files: map[string][]byte{"a.json": []byte("x")}}
 	var buf bytes.Buffer
-	err := Add(context.Background(), client, ref(), workDir, &buf)
+	_, err := Add(context.Background(), client, ref(), workDir, &buf)
 	if err == nil {
 		t.Fatal("expected refusal when target folder exists")
 	}
@@ -115,7 +119,7 @@ func TestAddRefusesWhenTargetExists(t *testing.T) {
 func TestAddRefusesWhenUpstreamHasMultipleSchemas(t *testing.T) {
 	client := &fakeClient{sha: "deadbeef", names: []string{"widget", "gadget"}}
 	var buf bytes.Buffer
-	err := Add(context.Background(), client, ref(), t.TempDir(), &buf)
+	_, err := Add(context.Background(), client, ref(), t.TempDir(), &buf)
 	if err == nil {
 		t.Fatal("expected error when upstream has multiple schemas")
 	}
