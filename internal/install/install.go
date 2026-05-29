@@ -66,7 +66,7 @@ func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir s
 		return "", err
 	}
 
-	hashes, err := writeFiles(targetDir, files)
+	hashes, err := WriteFiles(targetDir, files)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +79,7 @@ func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir s
 		SHA:           sha,
 		Files:         hashes,
 	}
-	if err := writeManifest(targetDir, manifest); err != nil {
+	if err := WriteManifest(targetDir, manifest); err != nil {
 		return "", err
 	}
 
@@ -89,11 +89,11 @@ func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir s
 	return name, nil
 }
 
-// writeFiles writes each fetched file under targetDir and returns the SHA-256
+// WriteFiles writes each fetched file under targetDir and returns the SHA-256
 // hash of the bytes written, keyed by the same forward-slash relative path used
 // to fetch it. Hashing the bytes after they are written makes the manifest a
 // faithful integrity record of what is on disk (ADR 0006).
-func writeFiles(targetDir string, files map[string][]byte) (map[string]string, error) {
+func WriteFiles(targetDir string, files map[string][]byte) (map[string]string, error) {
 	hashes := make(map[string]string, len(files))
 	for relPath, data := range files {
 		absPath := filepath.Join(targetDir, filepath.FromSlash(relPath))
@@ -109,9 +109,25 @@ func writeFiles(targetDir string, files map[string][]byte) (map[string]string, e
 	return hashes, nil
 }
 
-// writeManifest serialises m as pretty-printed JSON (deterministic since
+// ReadManifest loads and decodes the per-schema manifest from targetDir.
+// fs.ErrNotExist is surfaced unwrapped so callers can distinguish "schema is
+// not tracked by osch" from arbitrary I/O failures with errors.Is.
+func ReadManifest(targetDir string) (Manifest, error) {
+	path := filepath.Join(targetDir, ManifestFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Manifest{}, err
+	}
+	var m Manifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		return Manifest{}, fmt.Errorf("parsing %s: %w", path, err)
+	}
+	return m, nil
+}
+
+// WriteManifest serialises m as pretty-printed JSON (deterministic since
 // encoding/json sorts map keys) into targetDir/.osch.json.
-func writeManifest(targetDir string, m Manifest) error {
+func WriteManifest(targetDir string, m Manifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encoding manifest: %w", err)
