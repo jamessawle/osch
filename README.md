@@ -52,6 +52,14 @@ Scans `openspec/schemas/` in the current directory and prints a table with one r
 
 If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
 
+### Update an installed schema
+
+```
+osch update <schema>
+```
+
+Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "already up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit. This slice always overwrites local edits — refusing to overwrite modified files lands in a follow-up.
+
 ### Remove an installed schema
 
 ```
