@@ -84,4 +84,4 @@ brews:
       email: bot@goreleaser.com
     commit_msg_template: "chore(brew): osch {{ .Tag }}"
     test: |
-      system "#{bin}/osch", "version"
+      system bin/"osch", "version"
