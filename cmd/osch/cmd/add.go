@@ -32,9 +32,9 @@ var stdinIsTTY = func() bool {
 func newAddCmd() *cobra.Command {
 	var activate, noActivate bool
 	cmd := &cobra.Command{
-		Use:   "add <owner>/<repo>",
+		Use:   "add <owner>/<repo> [schema]",
 		Short: "Install a schema from an upstream repository",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if activate && noActivate {
 				return errors.New("--activate and --no-activate cannot be used together")
@@ -43,11 +43,15 @@ func newAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var selected string
+			if len(args) == 2 {
+				selected = args[1]
+			}
 			client, err := clientFactory(ref.Provider)
 			if err != nil {
 				return err
 			}
-			name, err := install.Add(cmd.Context(), client, ref, ".", cmd.OutOrStdout())
+			name, err := install.Add(cmd.Context(), client, ref, selected, ".", cmd.OutOrStdout())
 			if err != nil {
 				return err
 			}
