@@ -46,7 +46,7 @@ func TestAddSingleSchemaHappyPath(t *testing.T) {
 	}
 	workDir := t.TempDir()
 	var buf bytes.Buffer
-	name, err := Add(context.Background(), client, ref(), workDir, &buf)
+	name, err := Add(context.Background(), client, ref(), "", workDir, &buf)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestAddRefusesWhenTargetExists(t *testing.T) {
 	}
 	client := &fakeClient{sha: "deadbeef", names: []string{"widget"}, files: map[string][]byte{"a.json": []byte("x")}}
 	var buf bytes.Buffer
-	_, err := Add(context.Background(), client, ref(), workDir, &buf)
+	_, err := Add(context.Background(), client, ref(), "", workDir, &buf)
 	if err == nil {
 		t.Fatal("expected refusal when target folder exists")
 	}
@@ -116,12 +116,65 @@ func TestAddRefusesWhenTargetExists(t *testing.T) {
 	}
 }
 
-func TestAddRefusesWhenUpstreamHasMultipleSchemas(t *testing.T) {
+func TestAddMultiSchemaRequiresSelection(t *testing.T) {
 	client := &fakeClient{sha: "deadbeef", names: []string{"widget", "gadget"}}
+	workDir := t.TempDir()
 	var buf bytes.Buffer
-	_, err := Add(context.Background(), client, ref(), t.TempDir(), &buf)
+	_, err := Add(context.Background(), client, ref(), "", workDir, &buf)
 	if err == nil {
-		t.Fatal("expected error when upstream has multiple schemas")
+		t.Fatal("expected error when upstream has multiple schemas and no selection")
+	}
+	for _, want := range []string{"widget", "gadget"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q should list available schema %q", err.Error(), want)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(workDir, "openspec")); len(entries) != 0 {
+		t.Errorf("no files should be written on error, got %d entries under openspec/", len(entries))
+	}
+}
+
+func TestAddMultiSchemaExplicitSelection(t *testing.T) {
+	client := &fakeClient{
+		sha:   "deadbeef",
+		names: []string{"widget", "gadget"},
+		files: map[string][]byte{"manifest.json": []byte(`{"k":"v"}`)},
+	}
+	workDir := t.TempDir()
+	var buf bytes.Buffer
+	name, err := Add(context.Background(), client, ref(), "gadget", workDir, &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "gadget" {
+		t.Errorf("Add returned name %q, want gadget", name)
+	}
+	if _, err := os.Stat(filepath.Join(workDir, "openspec", "schemas", "gadget", "manifest.json")); err != nil {
+		t.Errorf("expected gadget/manifest.json to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workDir, "openspec", "schemas", "widget")); !os.IsNotExist(err) {
+		t.Errorf("widget folder should not exist when gadget was selected: err=%v", err)
+	}
+}
+
+func TestAddUnknownSchemaListsAvailable(t *testing.T) {
+	client := &fakeClient{sha: "deadbeef", names: []string{"widget", "gadget"}}
+	workDir := t.TempDir()
+	var buf bytes.Buffer
+	_, err := Add(context.Background(), client, ref(), "sprocket", workDir, &buf)
+	if err == nil {
+		t.Fatal("expected error for unknown schema selection")
+	}
+	if !strings.Contains(err.Error(), "sprocket") {
+		t.Errorf("error %q should mention the bad selection", err.Error())
+	}
+	for _, want := range []string{"widget", "gadget"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q should list available schema %q", err.Error(), want)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(workDir, "openspec")); len(entries) != 0 {
+		t.Errorf("no files should be written on error, got %d entries under openspec/", len(entries))
 	}
 }
 

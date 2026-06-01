@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jamessawle/osch/internal/source"
 )
@@ -41,19 +42,19 @@ type Manifest struct {
 
 // Add installs a single schema from ref into workingDir/openspec/schemas/<name>/
 // and returns the installed schema's name so callers can drive follow-on steps
-// (e.g. activation) without re-deriving it. This slice implements the happy
-// path for an upstream repo with exactly one schema directory under schemas/;
-// multiple schemas or an existing local target produce a friendly error rather
-// than a partial install.
-func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir string, stdout io.Writer) (string, error) {
+// (e.g. activation) without re-deriving it. When the upstream publishes more
+// than one schema, selected picks which to install; an empty selected on a
+// multi-schema upstream is a user error that lists what is available rather
+// than guessing.
+func Add(ctx context.Context, client source.Client, ref source.Ref, selected, workingDir string, stdout io.Writer) (string, error) {
 	sha, names, err := client.ListSchemas(ctx, ref)
 	if err != nil {
 		return "", err
 	}
-	if len(names) != 1 {
-		return "", fmt.Errorf("repository %s contains %d schemas; multi-schema installs are not supported yet", ref, len(names))
+	name, err := chooseSchema(ref, selected, names)
+	if err != nil {
+		return "", err
 	}
-	name := names[0]
 	targetDir := filepath.Join(workingDir, "openspec", "schemas", name)
 	if _, err := os.Stat(targetDir); err == nil {
 		return "", fmt.Errorf("refusing to overwrite existing schema folder %s (use osch update to refresh)", targetDir)
@@ -87,6 +88,24 @@ func Add(ctx context.Context, client source.Client, ref source.Ref, workingDir s
 		return "", err
 	}
 	return name, nil
+}
+
+// chooseSchema reconciles the user's optional selection against the upstream
+// listing. The unknown- and missing-selection error paths intentionally share
+// the listing so the user sees the same authoritative set of choices in both.
+func chooseSchema(ref source.Ref, selected string, names []string) (string, error) {
+	if selected == "" {
+		if len(names) == 1 {
+			return names[0], nil
+		}
+		return "", fmt.Errorf("repository %s publishes %d schemas; specify one of: %s", ref, len(names), strings.Join(names, ", "))
+	}
+	for _, n := range names {
+		if n == selected {
+			return selected, nil
+		}
+	}
+	return "", fmt.Errorf("schema %q not found in %s; available schemas: %s", selected, ref, strings.Join(names, ", "))
 }
 
 // WriteFiles writes each fetched file under targetDir and returns the SHA-256

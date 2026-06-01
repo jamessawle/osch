@@ -51,9 +51,9 @@ func TestAddTooManyArgs(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"add", "a/b", "c/d"})
+	root.SetArgs([]string{"add", "a/b", "schema", "extra"})
 	if err := root.Execute(); err == nil {
-		t.Fatal("expected error when more than one argument is given")
+		t.Fatal("expected error when more than two arguments are given")
 	}
 }
 
