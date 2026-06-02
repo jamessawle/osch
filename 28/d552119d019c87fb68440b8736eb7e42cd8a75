@@ -1,0 +1,21 @@
+internal/list/list.go
+  ai_agent 125-126
+internal/install/integrity_test.go
+  ai_agent 8,36,43-44,53,59-60,69,75-76,86,92-93,103,109-110,118,122-123,131,135-136
+cmd/osch/cmd/update_test.go
+  ai_agent 5-6,36-37,40,47
+internal/update/update_test.go
+  ai_agent 8,244-414
+internal/install/integrity.go
+  ai_agent 10,13-16,18-22,24-26,28-31,34,52,55,62,67,71,74-75
+internal/update/update.go
+  ai_agent 3-5,17,58-65,73
+README.md
+  ai_agent 67-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "28d552119d019c87fb68440b8736eb7e42cd8a75",
+  "prompts": {}
+}
