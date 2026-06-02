@@ -18,10 +18,13 @@ import (
 
 const emptyMessage = "No OpenSpec schemas installed"
 
-// List scans workingDir/openspec/schemas/ and writes a NAME/ACTIVE/TRACKED
-// table to stdout. Missing or empty schemas directory prints emptyMessage and
-// returns nil. Only fs.ErrNotExist on either openspec/schemas/ or the OpenSpec
-// config file is treated as a soft failure; every other I/O error is returned.
+const shortSHALen = 7
+
+// List scans workingDir/openspec/schemas/ and writes a
+// NAME/ACTIVE/TRACKED/SOURCE/SHA table to stdout. Missing or empty schemas
+// directory prints emptyMessage and returns nil. Only fs.ErrNotExist on either
+// openspec/schemas/ or the OpenSpec config file is treated as a soft failure;
+// every other I/O error is returned.
 func List(workingDir string, stdout io.Writer) error {
 	schemasDir := filepath.Join(workingDir, "openspec", "schemas")
 	entries, err := os.ReadDir(schemasDir)
@@ -51,7 +54,7 @@ func List(workingDir string, stdout io.Writer) error {
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED\tSOURCE\tSHA"); err != nil {
 		return err
 	}
 	for _, name := range names {
@@ -60,20 +63,27 @@ func List(workingDir string, stdout io.Writer) error {
 			activeCol = "*"
 		}
 		tracked := "no"
-		if isTracked(filepath.Join(schemasDir, name)) {
+		source, sha := "", ""
+		schemaDir := filepath.Join(schemasDir, name)
+		if m, err := install.ReadManifest(schemaDir); err == nil {
+			tracked = "yes"
+			source = m.Source
+			sha = shortSHA(m.SHA)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			// Manifest exists but is unreadable/unparseable: mark tracked
+			// (the file is present) but leave source/sha blank.
 			tracked = "yes"
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", name, activeCol, tracked); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", name, activeCol, tracked, source, sha); err != nil {
 			return err
 		}
 	}
 	return tw.Flush()
 }
 
-// isTracked reports whether schemaDir contains a per-schema manifest. The
-// manifest body is not inspected at this layer; downstream commands that need
-// the manifest contents will surface any corruption themselves.
-func isTracked(schemaDir string) bool {
-	_, err := os.Stat(filepath.Join(schemaDir, install.ManifestFile))
-	return err == nil
+func shortSHA(sha string) string {
+	if len(sha) <= shortSHALen {
+		return sha
+	}
+	return sha[:shortSHALen]
 }

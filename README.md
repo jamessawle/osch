@@ -49,6 +49,8 @@ Scans `openspec/schemas/` in the current directory and prints a table with one r
 - `NAME` — the schema folder name.
 - `ACTIVE` — marked with `*` when the schema name matches the top-level `schema:` key in `openspec/config.yaml`.
 - `TRACKED` — `yes` when the folder contains a `.osch.json` manifest (i.e. was installed by `osch`), otherwise `no`.
+- `SOURCE` — the manifest's `source` field (e.g. `owner/repo`); blank for untracked rows.
+- `SHA` — the first 7 characters of the manifest's pinned commit SHA; blank for untracked rows.
 
 If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
 
