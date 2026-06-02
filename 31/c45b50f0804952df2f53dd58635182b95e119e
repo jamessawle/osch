@@ -1,0 +1,13 @@
+README.md
+  ai_agent 68,73-80
+cmd/osch/cmd/remove.go
+  ai_agent 8-12,20-23,25-26,32-34,39-56,66,75-80,88-89,93-99,103,106,108-133,135,141,151,158-252
+cmd/osch/cmd/remove_test.go
+  ai_agent 262-536
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "31c45b50f0804952df2f53dd58635182b95e119e",
+  "prompts": {}
+}
