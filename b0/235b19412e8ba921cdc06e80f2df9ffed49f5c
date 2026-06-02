@@ -1,0 +1,15 @@
+README.md
+  ai_agent 71
+cmd/osch/cmd/remove_test.go
+  ai_agent 173-261
+cmd/osch/cmd/remove.go
+  ai_agent 10,36-52,60-77
+internal/openspec/config.go
+  ai_agent 21-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "b0235b19412e8ba921cdc06e80f2df9ffed49f5c",
+  "prompts": {}
+}
