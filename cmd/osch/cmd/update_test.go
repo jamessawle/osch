@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,16 +33,18 @@ func TestUpdateRunsAgainstFakeClient(t *testing.T) {
 
 	dir := t.TempDir()
 	schemaDir := filepath.Join(dir, "openspec", "schemas", "widget")
-	if _, err := install.WriteFiles(schemaDir, map[string][]byte{"manifest.json": []byte(`{"k":"v1"}`)}); err != nil {
+	seedBytes := []byte(`{"k":"v1"}`)
+	if _, err := install.WriteFiles(schemaDir, map[string][]byte{"manifest.json": seedBytes}); err != nil {
 		t.Fatalf("seed files: %v", err)
 	}
+	seedHash := sha256.Sum256(seedBytes)
 	if err := install.WriteManifest(schemaDir, install.Manifest{
 		Schema:        install.ManifestSchemaURL,
 		SchemaVersion: install.ManifestSchemaVersion,
 		Source:        "acme/widgets",
 		Name:          "widget",
 		SHA:           "oldsha",
-		Files:         map[string]string{"manifest.json": "ignored"},
+		Files:         map[string]string{"manifest.json": hex.EncodeToString(seedHash[:])},
 	}); err != nil {
 		t.Fatalf("seed manifest: %v", err)
 	}

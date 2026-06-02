@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -237,6 +238,180 @@ func TestUpdateAddsAndRemovesFiles(t *testing.T) {
 	}
 	if _, ok := m.Files["brand/new.json"]; !ok {
 		t.Errorf("brand/new.json should be in files map: %v", m.Files)
+	}
+}
+
+// snapshotDir captures bytes + mtime for every file under dir keyed by absolute
+// path. It is used to assert no file was touched during a refused update.
+func snapshotDir(t *testing.T, dir string) map[string]struct {
+	data  []byte
+	mtime int64
+} {
+	t.Helper()
+	out := map[string]struct {
+		data  []byte
+		mtime int64
+	}{}
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		out[path] = struct {
+			data  []byte
+			mtime int64
+		}{data, info.ModTime().UnixNano()}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot %s: %v", dir, err)
+	}
+	return out
+}
+
+func assertSnapshotUnchanged(t *testing.T, dir string, before map[string]struct {
+	data  []byte
+	mtime int64
+}) {
+	t.Helper()
+	after := snapshotDir(t, dir)
+	if len(after) != len(before) {
+		t.Errorf("file set changed: before=%d files, after=%d files", len(before), len(after))
+	}
+	for path, b := range before {
+		a, ok := after[path]
+		if !ok {
+			t.Errorf("file disappeared: %s", path)
+			continue
+		}
+		if !bytes.Equal(a.data, b.data) {
+			t.Errorf("file %s bytes changed: before=%q after=%q", path, b.data, a.data)
+		}
+		if a.mtime != b.mtime {
+			t.Errorf("file %s mtime changed", path)
+		}
+	}
+}
+
+func TestUpdateRefusesWhenFileEdited(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json":     []byte("alpha\n"),
+		"sub/b.yaml": []byte("b: 1\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	// Hand-edit one tracked file.
+	if err := os.WriteFile(filepath.Join(dir, "a.json"), []byte("EDITED\n"), 0o644); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	before := snapshotDir(t, dir)
+
+	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
+	var buf bytes.Buffer
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	if !strings.Contains(err.Error(), "a.json") {
+		t.Errorf("error %q should list a.json", err.Error())
+	}
+	if !strings.Contains(err.Error(), "local modifications") {
+		t.Errorf("error %q should mention local modifications", err.Error())
+	}
+	if client.listCalls != 0 || client.fetchCalls != 0 {
+		t.Errorf("no network calls expected on refusal; list=%d fetch=%d", client.listCalls, client.fetchCalls)
+	}
+	assertSnapshotUnchanged(t, dir, before)
+}
+
+func TestUpdateRefusesWhenFileDeleted(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json":     []byte("alpha\n"),
+		"sub/b.yaml": []byte("b: 1\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	if err := os.Remove(filepath.Join(dir, "sub", "b.yaml")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	before := snapshotDir(t, dir)
+
+	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
+	var buf bytes.Buffer
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	if !strings.Contains(err.Error(), "sub/b.yaml") {
+		t.Errorf("error %q should list sub/b.yaml", err.Error())
+	}
+	if client.listCalls != 0 || client.fetchCalls != 0 {
+		t.Errorf("no network calls expected on refusal; list=%d fetch=%d", client.listCalls, client.fetchCalls)
+	}
+	assertSnapshotUnchanged(t, dir, before)
+}
+
+func TestUpdateRefusesWhenExtraFile(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json": []byte("alpha\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	if err := os.WriteFile(filepath.Join(dir, "extra.txt"), []byte("untracked\n"), 0o644); err != nil {
+		t.Fatalf("write extra: %v", err)
+	}
+	before := snapshotDir(t, dir)
+
+	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
+	var buf bytes.Buffer
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	if !strings.Contains(err.Error(), "extra.txt") {
+		t.Errorf("error %q should list extra.txt", err.Error())
+	}
+	if client.listCalls != 0 || client.fetchCalls != 0 {
+		t.Errorf("no network calls expected on refusal; list=%d fetch=%d", client.listCalls, client.fetchCalls)
+	}
+	assertSnapshotUnchanged(t, dir, before)
+}
+
+type failingListClient struct {
+	fakeClient
+	listErr error
+}
+
+func (f *failingListClient) ListSchemas(_ context.Context, _ source.Ref) (string, []string, error) {
+	f.listCalls++
+	return "", nil, f.listErr
+}
+
+func TestUpdatePropagatesUpstreamResolveError(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json": []byte("alpha\n"),
+	})
+	client := &failingListClient{listErr: errors.New("network down")}
+	var buf bytes.Buffer
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	if err == nil {
+		t.Fatal("expected error when upstream HEAD resolve fails")
+	}
+	if !strings.Contains(err.Error(), "network down") {
+		t.Errorf("error %q should wrap underlying cause", err.Error())
+	}
+	if !strings.Contains(err.Error(), "widget") {
+		t.Errorf("error %q should mention schema name", err.Error())
+	}
+	if client.fetchCalls != 0 {
+		t.Errorf("FetchSchemaFiles should not be called when list fails; got %d", client.fetchCalls)
 	}
 }
 
