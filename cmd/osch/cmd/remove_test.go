@@ -259,6 +259,281 @@ func TestRemoveMalformedConfigIsNoOpForReset(t *testing.T) {
 	}
 }
 
+func TestRemoveActivePromptSelectByIndex(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	// Confirm with "y", then pick index 1 (gadget — sorted before spec-driven).
+	out, err := runRemove(t, dir, []string{"widget"}, "y\n1\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("output %q should show the menu", out)
+	}
+	if !strings.Contains(out, "1) gadget") {
+		t.Errorf("output %q should list gadget at index 1", out)
+	}
+	if !strings.Contains(out, "active schema set to gadget") {
+		t.Errorf("output %q should confirm selection", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "gadget" {
+		t.Errorf("schema key = %q, want gadget", got)
+	}
+}
+
+func TestRemoveActivePromptSelectByName(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	out, err := runRemove(t, dir, []string{"widget"}, "y\ngadget\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "active schema set to gadget") {
+		t.Errorf("output %q should confirm selection", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "gadget" {
+		t.Errorf("schema key = %q, want gadget", got)
+	}
+}
+
+func TestRemoveActivePromptEmptyDefaultsToSpecDriven(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	out, err := runRemove(t, dir, []string{"widget"}, "y\n\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven fallback", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveActivePromptSelectSpecDrivenByName(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	out, err := runRemove(t, dir, []string{"widget"}, "y\nspec-driven\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven selection", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveActivePromptInvalidRetriesThenFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	// Three invalid lines exhausts the retry budget; the loop falls back to
+	// spec-driven rather than blocking on a fourth read.
+	out, err := runRemove(t, dir, []string{"widget"}, "y\nbogus\n99\nnope\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Count(out, "invalid selection") != promptRetries {
+		t.Errorf("expected %d invalid-selection messages, got %q", promptRetries, out)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should fall back to spec-driven", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveActivateFlagHappyPath(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes", "--activate", "gadget"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("--activate should skip the menu, got %q", out)
+	}
+	if !strings.Contains(out, "active schema set to gadget") {
+		t.Errorf("output %q should confirm activation", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "gadget" {
+		t.Errorf("schema key = %q, want gadget", got)
+	}
+}
+
+func TestRemoveActivateFlagUnknownAbortsBeforeDeletion(t *testing.T) {
+	dir := t.TempDir()
+	target := seedSchema(t, dir, "widget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, false)
+
+	_, err := runRemove(t, dir, []string{"widget", "--yes", "--activate", "nope"}, "")
+	if err == nil {
+		t.Fatal("expected error for unknown --activate target")
+	}
+	if !strings.Contains(err.Error(), "not installed") {
+		t.Errorf("error %q should mention not installed", err.Error())
+	}
+	if _, statErr := os.Stat(target); statErr != nil {
+		t.Errorf("widget folder must not be deleted on validation failure: %v", statErr)
+	}
+	if got := readSchemaKey(t, cfg); got != "widget" {
+		t.Errorf("schema key changed to %q; should still be widget", got)
+	}
+}
+
+func TestRemoveActivateSpecDrivenAllowed(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, false)
+
+	// spec-driven is not under openspec/schemas/ but the flag must still
+	// accept it because OpenSpec ships it as the default.
+	out, err := runRemove(t, dir, []string{"widget", "--yes", "--activate", "spec-driven"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveNoActivateFlagSkipsPrompt(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true)
+
+	// stdin pretends to be a TTY but --no-activate should bypass the menu.
+	out, err := runRemove(t, dir, []string{"widget", "--yes", "--no-activate"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("--no-activate should skip the menu, got %q", out)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven fallback", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveActivateFlagsConflict(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, false)
+
+	_, err := runRemove(t, dir, []string{"widget", "--yes", "--activate", "gadget", "--no-activate"}, "")
+	if err == nil {
+		t.Fatal("expected error when both --activate and --no-activate are set")
+	}
+	if !strings.Contains(err.Error(), "cannot be used together") {
+		t.Errorf("error %q should explain the conflict", err.Error())
+	}
+}
+
+func TestRemoveNonTTYDefaultsToSpecDriven(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("non-TTY should skip the menu, got %q", out)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven fallback", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveNoOtherSchemasSilentlyFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	cfg := writeConfig(t, dir, "schema: widget\n")
+	withStdinTTY(t, true) // even on a TTY, no menu when nothing else is installed
+
+	out, err := runRemove(t, dir, []string{"widget"}, "y\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("no other schemas should mean no menu, got %q", out)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report spec-driven fallback", out)
+	}
+	if got := readSchemaKey(t, cfg); got != "spec-driven" {
+		t.Errorf("schema key = %q, want spec-driven", got)
+	}
+}
+
+func TestRemoveInactiveSchemaNoPromptEvenWithOthers(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	seedSchema(t, dir, "gadget", true)
+	original := "schema: gadget\n"
+	cfg := writeConfig(t, dir, original)
+	withStdinTTY(t, true)
+
+	out, err := runRemove(t, dir, []string{"widget"}, "y\n")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "Choose the new active schema") {
+		t.Errorf("removing a non-active schema must not prompt, got %q", out)
+	}
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(data) != original {
+		t.Errorf("config changed; got:\n%s\nwant:\n%s", string(data), original)
+	}
+}
+
 func TestRemoveRejectsPathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	withStdinTTY(t, false)

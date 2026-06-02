@@ -68,12 +68,19 @@ Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default bran
 ### Remove an installed schema
 
 ```
-osch remove <schema> [--yes]
+osch remove <schema> [--yes] [--activate <name> | --no-activate]
 ```
 
 Deletes `openspec/schemas/<schema>/` recursively from the current directory, whether or not the schema was originally installed by `osch add` (the `.osch.json` manifest is incidental). Interactively (stdin is a TTY) it prompts `y/N`; `--yes` skips the prompt. When stdin is not a TTY and `--yes` is not set the command aborts rather than silently proceeding. If the folder does not exist, the command exits non-zero with a clear message. The schema argument must be a plain folder name — path separators and `..` are rejected.
 
-If the removed schema is the one named in `openspec/config.yaml`'s top-level `schema` key, that key is reset to `spec-driven` (OpenSpec's default schema) so the project is never left pointing at a missing folder; the command prints `removed <name> (active schema reset to spec-driven)`. If `openspec/config.yaml` is absent or unparseable, no rewrite is attempted and the deletion still succeeds.
+If the removed schema is the one named in `openspec/config.yaml`'s top-level `schema` key, `osch` picks a replacement so the project is never left pointing at a missing folder. The replacement is determined as follows:
+
+- If `--activate <name>` is set, the key is rewritten to `<name>`. The target must either be `spec-driven` (OpenSpec's default) or another installed schema; an unknown target aborts the whole command **before** the folder is deleted so a typo does not cost you the schema.
+- If `--no-activate` is set, or stdin is not a TTY, the key falls back silently to `spec-driven`.
+- Otherwise, if at least one other schema remains installed, `osch` shows a numbered menu of those schemas plus `spec-driven` and accepts either a 1-based index or the schema name. Empty input (just Enter) selects `spec-driven`. Invalid input re-prompts up to three times before falling back to `spec-driven`.
+- If no other schemas are installed, the menu is skipped and the key falls back silently to `spec-driven`.
+
+The success line distinguishes the activation outcome: `removed <name> (active schema set to <chosen>)` for a non-default selection, or `removed <name> (active schema reset to spec-driven)` for the fallback. Passing both `--activate` and `--no-activate` is an error. If `openspec/config.yaml` is absent or unparseable, no rewrite is attempted and the deletion still succeeds.
 
 ## Status
 
