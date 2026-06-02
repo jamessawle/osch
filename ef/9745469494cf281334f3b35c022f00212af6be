@@ -1,0 +1,27 @@
+internal/update/update_test.go
+  ai_agent 36-39
+internal/list/list_test.go
+  ai_agent 5,7,15,18-58,108,122,136,149,153,170,194,217,243,278,295,313,345,351-473
+internal/github/http_client.go
+  ai_agent 73-83,86,89,92,96,99,104,107,111,114-125,128,153
+cmd/osch/cmd/list.go
+  ai_agent 5,9-17,19-20,25-33,36-37
+README.md
+  ai_agent 44,54-56
+cmd/osch/cmd/add_test.go
+  ai_agent 29-32
+internal/github/http_client_test.go
+  ai_agent 239-281
+internal/list/list.go
+  ai_agent 6,18,25-31,33-42,70-102,104,113,119-127,130-131,133,135
+internal/source/source.go
+  ai_agent 24-30
+internal/install/install_test.go
+  ai_agent 34-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "ef9745469494cf281334f3b35c022f00212af6be",
+  "prompts": {}
+}
