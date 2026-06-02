@@ -41,7 +41,7 @@ After a successful install, `osch` offers to set the new schema as active by wri
 ### List installed schemas
 
 ```
-osch list
+osch list [--offline]
 ```
 
 Scans `openspec/schemas/` in the current directory and prints a table with one row per installed schema:
@@ -51,6 +51,9 @@ Scans `openspec/schemas/` in the current directory and prints a table with one r
 - `TRACKED` — `yes` when the folder contains a `.osch.json` manifest (i.e. was installed by `osch`), otherwise `no`.
 - `SOURCE` — the manifest's `source` field (e.g. `owner/repo`); blank for untracked rows.
 - `SHA` — the first 7 characters of the manifest's pinned commit SHA; blank for untracked rows.
+- `UPSTREAM` — `up-to-date` when the pinned SHA matches the upstream default-branch HEAD, `behind` when it differs, or `unknown` when the upstream cannot be resolved (network error, repo gone, etc.). Blank for untracked rows. Multiple schemas from the same source share a single upstream lookup within one invocation.
+
+Pass `--offline` to skip all upstream lookups; every tracked row's `UPSTREAM` reads `unknown` and the command still exits 0.
 
 If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
 

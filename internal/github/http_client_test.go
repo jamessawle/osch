@@ -236,6 +236,49 @@ func TestHTTPClientFetchSchemaFiles(t *testing.T) {
 	}
 }
 
+func TestHTTPClientLatestSHA(t *testing.T) {
+	var sawContents bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/acme/widgets":
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case "/repos/acme/widgets/commits/main":
+			_, _ = w.Write([]byte(`{"sha":"abc123"}`))
+		case "/repos/acme/widgets/contents/schemas":
+			sawContents = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	sha, err := c.LatestSHA(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sha != "abc123" {
+		t.Errorf("sha = %q, want abc123", sha)
+	}
+	if sawContents {
+		t.Error("LatestSHA must not list /contents/schemas")
+	}
+}
+
+func TestHTTPClientLatestSHARepoNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	_, err := c.LatestSHA(context.Background(), source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "ghost"})
+	assertKind(t, err, source.KindNotFound)
+}
+
 func assertKind(t *testing.T, err error, want source.ErrorKind) {
 	t.Helper()
 	if err == nil {

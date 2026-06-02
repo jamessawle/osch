@@ -26,6 +26,10 @@ func (f *fakeClient) FetchSchemaFiles(_ context.Context, _ source.Ref, _, _ stri
 	return f.files, nil
 }
 
+func (f *fakeClient) LatestSHA(_ context.Context, _ source.Ref) (string, error) {
+	return f.sha, nil
+}
+
 // withClient swaps the package-level client factory for the duration of a
 // test. Tests must call it via t.Cleanup so they do not leak state.
 func withClient(t *testing.T, c source.Client) {

@@ -70,44 +70,62 @@ type contentEntry struct {
 	Path string `json:"path"`
 }
 
-// ListSchemas resolves the default branch HEAD commit of ref and returns the
-// names of schema directories under schemas/ at that commit. All failures are
-// reported as *source.ClientError with a friendly message.
-func (c *HTTPClient) ListSchemas(ctx context.Context, ref source.Ref) (string, []string, error) {
+// LatestSHA resolves the default branch HEAD commit SHA of ref, making only the
+// repo-info + commit-lookup calls. It exists so drift detection can avoid the
+// schemas/ contents call ListSchemas performs.
+func (c *HTTPClient) LatestSHA(ctx context.Context, ref source.Ref) (string, error) {
+	return c.resolveDefaultBranchSHA(ctx, ref)
+}
+
+// resolveDefaultBranchSHA fetches the repo's default branch and the HEAD commit
+// SHA on it. It is shared by ListSchemas (which then lists the schemas/ folder)
+// and LatestSHA (which stops here).
+func (c *HTTPClient) resolveDefaultBranchSHA(ctx context.Context, ref source.Ref) (string, error) {
 	repoStatus, repoBody, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", ref.Owner, ref.Name), "")
 	if err != nil {
-		return "", nil, source.NetworkError(ref, err)
+		return "", source.NetworkError(ref, err)
 	}
 	if repoStatus == http.StatusNotFound {
-		return "", nil, source.NotFoundError(ref)
+		return "", source.NotFoundError(ref)
 	}
 	if repoStatus != http.StatusOK {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("unexpected status %d from GitHub", repoStatus))
+		return "", source.NetworkError(ref, fmt.Errorf("unexpected status %d from GitHub", repoStatus))
 	}
 	var repo repoInfo
 	if err := json.Unmarshal(repoBody, &repo); err != nil {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("could not parse GitHub repository response: %w", err))
+		return "", source.NetworkError(ref, fmt.Errorf("could not parse GitHub repository response: %w", err))
 	}
 	if repo.DefaultBranch == "" {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("GitHub did not return a default branch"))
+		return "", source.NetworkError(ref, fmt.Errorf("GitHub did not return a default branch"))
 	}
 
 	commitStatus, commitBody, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/commits/%s", ref.Owner, ref.Name, repo.DefaultBranch), "")
 	if err != nil {
-		return "", nil, source.NetworkError(ref, err)
+		return "", source.NetworkError(ref, err)
 	}
 	if commitStatus != http.StatusOK {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("unexpected status %d resolving default branch commit", commitStatus))
+		return "", source.NetworkError(ref, fmt.Errorf("unexpected status %d resolving default branch commit", commitStatus))
 	}
 	var commit commitInfo
 	if err := json.Unmarshal(commitBody, &commit); err != nil {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("could not parse GitHub commit response: %w", err))
+		return "", source.NetworkError(ref, fmt.Errorf("could not parse GitHub commit response: %w", err))
 	}
 	if commit.SHA == "" {
-		return "", nil, source.NetworkError(ref, fmt.Errorf("GitHub did not return a commit SHA"))
+		return "", source.NetworkError(ref, fmt.Errorf("GitHub did not return a commit SHA"))
+	}
+	return commit.SHA, nil
+}
+
+// ListSchemas resolves the default branch HEAD commit of ref and returns the
+// names of schema directories under schemas/ at that commit. All failures are
+// reported as *source.ClientError with a friendly message.
+func (c *HTTPClient) ListSchemas(ctx context.Context, ref source.Ref) (string, []string, error) {
+	sha, err := c.resolveDefaultBranchSHA(ctx, ref)
+	if err != nil {
+		return "", nil, err
 	}
 
-	status, body, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/schemas", ref.Owner, ref.Name), commit.SHA)
+	status, body, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/schemas", ref.Owner, ref.Name), sha)
 	if err != nil {
 		return "", nil, source.NetworkError(ref, err)
 	}
@@ -132,7 +150,7 @@ func (c *HTTPClient) ListSchemas(ctx context.Context, ref source.Ref) (string, [
 	if len(names) == 0 {
 		return "", nil, source.EmptySchemasError(ref)
 	}
-	return commit.SHA, names, nil
+	return sha, names, nil
 }
 
 // FetchSchemaFiles walks schemas/<name>/ at the given commit SHA and returns

@@ -31,6 +31,10 @@ func (f *fakeClient) FetchSchemaFiles(_ context.Context, _ source.Ref, _, _ stri
 	return f.files, f.fetchErr
 }
 
+func (f *fakeClient) LatestSHA(_ context.Context, _ source.Ref) (string, error) {
+	return f.sha, f.listErr
+}
+
 func ref() source.Ref {
 	return source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"}
 }
