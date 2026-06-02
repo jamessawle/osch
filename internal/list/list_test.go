@@ -3,6 +3,8 @@ package list
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -150,7 +152,7 @@ func TestListHeaderColumns(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	header := strings.Fields(strings.SplitN(buf.String(), "\n", 2)[0])
-	want := []string{"NAME", "ACTIVE", "TRACKED", "SOURCE", "SHA", "UPSTREAM"}
+	want := []string{"NAME", "ACTIVE", "TRACKED", "SOURCE", "SHA", "FILES", "UPSTREAM"}
 	if len(header) != len(want) {
 		t.Fatalf("header columns = %v, want %v", header, want)
 	}
@@ -371,12 +373,12 @@ func upstreamCol(t *testing.T, out, name string) string {
 		if trackedIdx == -1 {
 			t.Fatalf("no TRACKED column in %q", line)
 		}
-		// Tracked rows have SOURCE and SHA in front of UPSTREAM; untracked
-		// rows have SOURCE and SHA blank so UPSTREAM (if any) is immediately
-		// after TRACKED.
+		// Tracked rows have SOURCE, SHA, FILES in front of UPSTREAM; untracked
+		// rows have those blank so UPSTREAM (if any) is immediately after
+		// TRACKED.
 		if fields[trackedIdx] == "yes" {
-			if len(fields) > trackedIdx+3 {
-				return fields[trackedIdx+3]
+			if len(fields) > trackedIdx+4 {
+				return fields[trackedIdx+4]
 			}
 			return ""
 		}
@@ -462,6 +464,156 @@ func TestListUpstreamDedupSameSource(t *testing.T) {
 	}
 	if client.calls["acme/multi"] != 1 {
 		t.Errorf("LatestSHA was called %d times for one source; want 1", client.calls["acme/multi"])
+	}
+}
+
+// filesCol returns the FILES cell for the row whose first column is name.
+// Untracked rows have empty SOURCE/SHA/FILES/UPSTREAM, so blank.
+func filesCol(t *testing.T, out, name string) string {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != name && !strings.HasPrefix(trimmed, name+" ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		trackedIdx := -1
+		for i, f := range fields {
+			if i == 0 {
+				continue
+			}
+			if f == "yes" || f == "no" {
+				trackedIdx = i
+				break
+			}
+		}
+		if trackedIdx == -1 {
+			t.Fatalf("no TRACKED column in %q", line)
+		}
+		if fields[trackedIdx] == "no" {
+			return ""
+		}
+		if len(fields) > trackedIdx+3 {
+			return fields[trackedIdx+3]
+		}
+		return ""
+	}
+	t.Fatalf("row for %q not found in %q", name, out)
+	return ""
+}
+
+func mkSchemaWithFiles(t *testing.T, root, name string, files map[string][]byte) {
+	t.Helper()
+	dir := filepath.Join(root, "openspec", "schemas", name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	hashes := map[string]string{}
+	for rel, data := range files {
+		abs := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(abs, data, 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		h := sha256.Sum256(data)
+		hashes[rel] = hex.EncodeToString(h[:])
+	}
+	m := install.Manifest{
+		Schema:        install.ManifestSchemaURL,
+		SchemaVersion: install.ManifestSchemaVersion,
+		Source:        "acme/" + name,
+		Name:          name,
+		SHA:           "deadbeefcafebabe1234567890",
+		Files:         hashes,
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	writeFile(t, filepath.Join(dir, install.ManifestFile), string(data)+"\n")
+}
+
+func TestListFilesClean(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+		"sub/x.yaml":  []byte("y: 2\n"),
+	})
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "clean" {
+		t.Errorf("FILES = %q, want clean; full output:\n%s", got, out)
+	}
+}
+
+func TestListFilesEdited(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+	})
+	// Overwrite the file after the manifest was written.
+	writeFile(t, filepath.Join(dir, "openspec", "schemas", "widget", "schema.json"), `{"a":2}`)
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "modified" {
+		t.Errorf("FILES = %q, want modified", got)
+	}
+}
+
+func TestListFilesDeleted(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+	})
+	if err := os.Remove(filepath.Join(dir, "openspec", "schemas", "widget", "schema.json")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "modified" {
+		t.Errorf("FILES = %q, want modified", got)
+	}
+}
+
+func TestListFilesExtra(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+	})
+	writeFile(t, filepath.Join(dir, "openspec", "schemas", "widget", "stowaway.txt"), "extra\n")
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "modified" {
+		t.Errorf("FILES = %q, want modified", got)
+	}
+}
+
+func TestListFilesEmptyMap(t *testing.T) {
+	dir := t.TempDir()
+	// mkSchema writes a manifest with Files: {} — the pre-hash-era case.
+	mkSchema(t, dir, "widget", true)
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "modified" {
+		t.Errorf("FILES = %q, want modified for empty files map", got)
+	}
+}
+
+func TestListFilesUntrackedBlank(t *testing.T) {
+	dir := t.TempDir()
+	mkSchema(t, dir, "widget", false)
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "" {
+		t.Errorf("untracked FILES = %q, want blank", got)
+	}
+}
+
+func TestListFilesIgnoredUnderOfflineFlag(t *testing.T) {
+	// FILES is fully local — --offline must not affect it.
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+	})
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "clean" {
+		t.Errorf("FILES under --offline = %q, want clean", got)
 	}
 }
 

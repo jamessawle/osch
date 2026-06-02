@@ -29,8 +29,14 @@ const (
 	upstreamUnknown  = "unknown"
 )
 
+// Files column values.
+const (
+	filesClean    = "clean"
+	filesModified = "modified"
+)
+
 // List scans workingDir/openspec/schemas/ and writes a
-// NAME/ACTIVE/TRACKED/SOURCE/SHA/UPSTREAM table to stdout. Missing or empty
+// NAME/ACTIVE/TRACKED/SOURCE/SHA/FILES/UPSTREAM table to stdout. Missing or empty
 // schemas directory prints emptyMessage and returns nil. Only fs.ErrNotExist
 // on either openspec/schemas/ or the OpenSpec config file is treated as a
 // soft failure; every other I/O error is returned.
@@ -101,7 +107,7 @@ func List(ctx context.Context, workingDir string, stdout io.Writer, client sourc
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED\tSOURCE\tSHA\tUPSTREAM"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED\tSOURCE\tSHA\tFILES\tUPSTREAM"); err != nil {
 		return err
 	}
 	for _, name := range names {
@@ -110,12 +116,18 @@ func List(ctx context.Context, workingDir string, stdout io.Writer, client sourc
 			activeCol = "*"
 		}
 		tracked := "no"
-		source, sha, upstream := "", "", ""
+		source, sha, files, upstream := "", "", "", ""
 		schemaDir := filepath.Join(schemasDir, name)
 		if m, err := install.ReadManifest(schemaDir); err == nil {
 			tracked = "yes"
 			source = m.Source
 			sha = shortSHA(m.SHA)
+			clean, ferr := install.CheckLocalFiles(schemaDir, m)
+			if ferr != nil || !clean {
+				files = filesModified
+			} else {
+				files = filesClean
+			}
 			latest := resolveUpstream(m.Source)
 			switch latest {
 			case upstreamUnknown:
@@ -132,7 +144,7 @@ func List(ctx context.Context, workingDir string, stdout io.Writer, client sourc
 			tracked = "yes"
 			upstream = upstreamUnknown
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", name, activeCol, tracked, source, sha, upstream); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, activeCol, tracked, source, sha, files, upstream); err != nil {
 			return err
 		}
 	}
