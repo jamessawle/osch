@@ -1,0 +1,13 @@
+internal/list/list.go
+  ai_agent 21-27,57,66-74,77,84-88
+internal/list/list_test.go
+  ai_agent 5,11-12,26-30,36-37,39-51,100,103-122,136-141,146,160-165,183-188,193,195,205,209,213,308-313,316-317,321-346,348,351
+README.md
+  ai_agent 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "22212dad49ff12dea14c7083420166f5acb0dd7c",
+  "prompts": {}
+}
