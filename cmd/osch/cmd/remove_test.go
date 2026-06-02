@@ -170,6 +170,95 @@ func TestRemoveUntrackedSchema(t *testing.T) {
 	}
 }
 
+func TestRemoveResetsActiveSchema(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	cfg := writeConfig(t, dir, "schema: widget\nother: keep\n")
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out, "active schema reset to spec-driven") {
+		t.Errorf("output %q should report active schema reset", out)
+	}
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "schema: spec-driven") {
+		t.Errorf("schema not reset to default, got:\n%s", body)
+	}
+	if !strings.Contains(body, "other: keep") {
+		t.Errorf("sibling key dropped, got:\n%s", body)
+	}
+}
+
+func TestRemoveInactiveSchemaLeavesConfigUntouched(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	original := "schema: other-schema\nother: keep\n"
+	cfg := writeConfig(t, dir, original)
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "active schema reset") {
+		t.Errorf("inactive schema should not trigger reset message, got %q", out)
+	}
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(data) != original {
+		t.Errorf("config changed; got:\n%s\nwant:\n%s", string(data), original)
+	}
+}
+
+func TestRemoveMissingConfigIsNoOp(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "active schema reset") {
+		t.Errorf("missing config should not trigger reset message, got %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "openspec", "config.yaml")); !os.IsNotExist(err) {
+		t.Errorf("config should not be created, stat err: %v", err)
+	}
+}
+
+func TestRemoveMalformedConfigIsNoOpForReset(t *testing.T) {
+	dir := t.TempDir()
+	seedSchema(t, dir, "widget", true)
+	malformed := "schema: : bad\n  - not valid\n"
+	cfg := writeConfig(t, dir, malformed)
+	withStdinTTY(t, false)
+
+	out, err := runRemove(t, dir, []string{"widget", "--yes"}, "")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if strings.Contains(out, "active schema reset") {
+		t.Errorf("malformed config should not trigger reset message, got %q", out)
+	}
+	data, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(data) != malformed {
+		t.Errorf("malformed config rewritten; got:\n%s", string(data))
+	}
+}
+
 func TestRemoveRejectsPathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	withStdinTTY(t, false)

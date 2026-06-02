@@ -70,7 +70,7 @@ osch remove <schema> [--yes]
 
 Deletes `openspec/schemas/<schema>/` recursively from the current directory, whether or not the schema was originally installed by `osch add` (the `.osch.json` manifest is incidental). Interactively (stdin is a TTY) it prompts `y/N`; `--yes` skips the prompt. When stdin is not a TTY and `--yes` is not set the command aborts rather than silently proceeding. If the folder does not exist, the command exits non-zero with a clear message. The schema argument must be a plain folder name — path separators and `..` are rejected.
 
-Clearing the active key in `openspec/config.yaml` when the removed schema is the active one is not yet implemented.
+If the removed schema is the one named in `openspec/config.yaml`'s top-level `schema` key, that key is reset to `spec-driven` (OpenSpec's default schema) so the project is never left pointing at a missing folder; the command prints `removed <name> (active schema reset to spec-driven)`. If `openspec/config.yaml` is absent or unparseable, no rewrite is attempted and the deletion still succeeds.
 
 ## Status
 
