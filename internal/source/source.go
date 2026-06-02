@@ -21,4 +21,11 @@ type Client interface {
 	// SHA. The returned map is keyed by forward-slash relative path within the
 	// schema folder, so the manifest written from it is stable across platforms.
 	FetchSchemaFiles(ctx context.Context, ref Ref, sha, name string) (map[string][]byte, error)
+
+	// LatestSHA resolves the default branch HEAD commit SHA for ref without
+	// listing the schemas/ folder. It exists for drift detection where the
+	// extra contents call ListSchemas performs would be misleading (e.g.
+	// a repo whose schemas/ folder has moved would surface as "no schemas"
+	// rather than the up-to-date/behind question the caller is asking).
+	LatestSHA(ctx context.Context, ref Ref) (string, error)
 }

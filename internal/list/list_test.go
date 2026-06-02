@@ -2,7 +2,9 @@ package list
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,7 +12,49 @@ import (
 	"testing"
 
 	"github.com/jamessawle/osch/internal/install"
+	"github.com/jamessawle/osch/internal/source"
 )
+
+// fakeClient is a stand-in for a source.Client used to drive the upstream
+// column. Only LatestSHA is exercised in these tests; the other methods are
+// left unimplemented so any accidental call fails the test loudly.
+type fakeClient struct {
+	results map[string]fakeResult
+	calls   map[string]int
+}
+
+type fakeResult struct {
+	sha string
+	err error
+}
+
+func newFakeClient(results map[string]fakeResult) *fakeClient {
+	return &fakeClient{results: results, calls: map[string]int{}}
+}
+
+func (f *fakeClient) LatestSHA(_ context.Context, ref source.Ref) (string, error) {
+	key := ref.String()
+	f.calls[key]++
+	r := f.results[key]
+	return r.sha, r.err
+}
+
+func (f *fakeClient) ListSchemas(_ context.Context, _ source.Ref) (string, []string, error) {
+	return "", nil, errors.New("ListSchemas not used by list")
+}
+
+func (f *fakeClient) FetchSchemaFiles(_ context.Context, _ source.Ref, _, _ string) (map[string][]byte, error) {
+	return nil, errors.New("FetchSchemaFiles not used by list")
+}
+
+func runList(t *testing.T, dir string, client source.Client, offline bool) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := List(context.Background(), dir, &buf, client, offline); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	return buf.String()
+}
 
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
@@ -61,7 +105,7 @@ const emptyOutput = "No OpenSpec schemas installed\n"
 func TestListMissingOpenspec(t *testing.T) {
 	dir := t.TempDir()
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if buf.String() != emptyOutput {
@@ -75,7 +119,7 @@ func TestListMissingSchemasDir(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if buf.String() != emptyOutput {
@@ -89,7 +133,7 @@ func TestListEmptySchemasDir(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if buf.String() != emptyOutput {
@@ -102,11 +146,11 @@ func TestListHeaderColumns(t *testing.T) {
 	mkSchema(t, dir, "widget", true)
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	header := strings.Fields(strings.SplitN(buf.String(), "\n", 2)[0])
-	want := []string{"NAME", "ACTIVE", "TRACKED", "SOURCE", "SHA"}
+	want := []string{"NAME", "ACTIVE", "TRACKED", "SOURCE", "SHA", "UPSTREAM"}
 	if len(header) != len(want) {
 		t.Fatalf("header columns = %v, want %v", header, want)
 	}
@@ -123,7 +167,7 @@ func TestListOneTrackedActive(t *testing.T) {
 	writeConfig(t, dir, "schema: widget\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	fields := schemaRow(t, buf.String(), "widget")
@@ -147,7 +191,7 @@ func TestListOneTrackedInactive(t *testing.T) {
 	writeConfig(t, dir, "schema: gadget\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	fields := schemaRow(t, buf.String(), "widget")
@@ -170,7 +214,7 @@ func TestListOneUntracked(t *testing.T) {
 	mkSchema(t, dir, "widget", false)
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	fields := schemaRow(t, buf.String(), "widget")
@@ -196,7 +240,7 @@ func TestListMix(t *testing.T) {
 	writeConfig(t, dir, "schema: gamma\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	out := buf.String()
@@ -231,7 +275,7 @@ func TestListConfigWithoutSchemaKey(t *testing.T) {
 	writeConfig(t, dir, "other: thing\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	fields := schemaRow(t, buf.String(), "widget")
@@ -248,7 +292,7 @@ func TestListMalformedConfig(t *testing.T) {
 	writeConfig(t, dir, "schema: [not-a-string\n  - broken: yaml\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	fields := schemaRow(t, buf.String(), "widget")
@@ -266,7 +310,7 @@ func TestListIgnoresNonDirectoryEntries(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "openspec", "schemas", "README.md"), "# notes\n")
 
 	var buf bytes.Buffer
-	if err := List(dir, &buf); err != nil {
+	if err := List(context.Background(), dir, &buf, nil, true); err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	out := buf.String()
@@ -298,9 +342,135 @@ func TestListSchemasDirUnreadable(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(schemasDir, 0o755) })
 
 	var buf bytes.Buffer
-	err := List(dir, &buf)
+	err := List(context.Background(), dir, &buf, nil, true)
 	if err == nil {
 		t.Fatalf("expected error for unreadable schemas dir, got nil; output=%q", buf.String())
+	}
+}
+
+// upstreamCol returns the UPSTREAM cell for the row whose first column is
+// name. It tolerates blank ACTIVE (untracked rows shift left by one).
+func upstreamCol(t *testing.T, out, name string) string {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != name && !strings.HasPrefix(trimmed, name+" ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		trackedIdx := -1
+		for i, f := range fields {
+			if i == 0 {
+				continue
+			}
+			if f == "yes" || f == "no" {
+				trackedIdx = i
+				break
+			}
+		}
+		if trackedIdx == -1 {
+			t.Fatalf("no TRACKED column in %q", line)
+		}
+		// Tracked rows have SOURCE and SHA in front of UPSTREAM; untracked
+		// rows have SOURCE and SHA blank so UPSTREAM (if any) is immediately
+		// after TRACKED.
+		if fields[trackedIdx] == "yes" {
+			if len(fields) > trackedIdx+3 {
+				return fields[trackedIdx+3]
+			}
+			return ""
+		}
+		if len(fields) > trackedIdx+1 {
+			return fields[trackedIdx+1]
+		}
+		return ""
+	}
+	t.Fatalf("row for %q not found in %q", name, out)
+	return ""
+}
+
+func TestListUpstreamUpToDate(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWith(t, dir, "widget", true, "acme/widgets", "abc123")
+	client := newFakeClient(map[string]fakeResult{
+		"acme/widgets": {sha: "abc123"},
+	})
+	out := runList(t, dir, client, false)
+	if got := upstreamCol(t, out, "widget"); got != "up-to-date" {
+		t.Errorf("UPSTREAM = %q, want up-to-date; full output:\n%s", got, out)
+	}
+}
+
+func TestListUpstreamBehind(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWith(t, dir, "widget", true, "acme/widgets", "oldsha")
+	client := newFakeClient(map[string]fakeResult{
+		"acme/widgets": {sha: "newsha"},
+	})
+	out := runList(t, dir, client, false)
+	if got := upstreamCol(t, out, "widget"); got != "behind" {
+		t.Errorf("UPSTREAM = %q, want behind; full output:\n%s", got, out)
+	}
+}
+
+func TestListUpstreamUnknownOnError(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWith(t, dir, "widget", true, "acme/widgets", "abc123")
+	client := newFakeClient(map[string]fakeResult{
+		"acme/widgets": {err: source.NotFoundError(source.Ref{Provider: source.ProviderGitHub, Owner: "acme", Name: "widgets"})},
+	})
+	out := runList(t, dir, client, false)
+	if got := upstreamCol(t, out, "widget"); got != "unknown" {
+		t.Errorf("UPSTREAM = %q, want unknown; full output:\n%s", got, out)
+	}
+}
+
+func TestListUpstreamOfflineFlag(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWith(t, dir, "widget", true, "acme/widgets", "abc123")
+	mkSchema(t, dir, "untracked", false)
+	// Build a client that, if used, would say "up-to-date" — to prove the
+	// offline flag short-circuits before any client call.
+	client := newFakeClient(map[string]fakeResult{
+		"acme/widgets": {sha: "abc123"},
+	})
+	out := runList(t, dir, client, true)
+	if got := upstreamCol(t, out, "widget"); got != "unknown" {
+		t.Errorf("tracked UPSTREAM under --offline = %q, want unknown", got)
+	}
+	if got := upstreamCol(t, out, "untracked"); got != "" {
+		t.Errorf("untracked UPSTREAM = %q, want blank", got)
+	}
+	if client.calls["acme/widgets"] != 0 {
+		t.Errorf("offline made %d LatestSHA call(s); want 0", client.calls["acme/widgets"])
+	}
+}
+
+func TestListUpstreamDedupSameSource(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWith(t, dir, "alpha", true, "acme/multi", "abc123")
+	mkSchemaWith(t, dir, "beta", true, "acme/multi", "abc123")
+	client := newFakeClient(map[string]fakeResult{
+		"acme/multi": {sha: "abc123"},
+	})
+	out := runList(t, dir, client, false)
+	if got := upstreamCol(t, out, "alpha"); got != "up-to-date" {
+		t.Errorf("alpha UPSTREAM = %q", got)
+	}
+	if got := upstreamCol(t, out, "beta"); got != "up-to-date" {
+		t.Errorf("beta UPSTREAM = %q", got)
+	}
+	if client.calls["acme/multi"] != 1 {
+		t.Errorf("LatestSHA was called %d times for one source; want 1", client.calls["acme/multi"])
+	}
+}
+
+func TestListUpstreamUntrackedBlank(t *testing.T) {
+	dir := t.TempDir()
+	mkSchema(t, dir, "widget", false)
+	out := runList(t, dir, newFakeClient(nil), false)
+	if got := upstreamCol(t, out, "widget"); got != "" {
+		t.Errorf("untracked UPSTREAM = %q, want blank", got)
 	}
 }
 

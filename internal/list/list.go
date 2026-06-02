@@ -3,6 +3,7 @@
 package list
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,18 +15,31 @@ import (
 
 	"github.com/jamessawle/osch/internal/install"
 	"github.com/jamessawle/osch/internal/openspec"
+	"github.com/jamessawle/osch/internal/source"
 )
 
 const emptyMessage = "No OpenSpec schemas installed"
 
 const shortSHALen = 7
 
+// Upstream column values.
+const (
+	upstreamUpToDate = "up-to-date"
+	upstreamBehind   = "behind"
+	upstreamUnknown  = "unknown"
+)
+
 // List scans workingDir/openspec/schemas/ and writes a
-// NAME/ACTIVE/TRACKED/SOURCE/SHA table to stdout. Missing or empty schemas
-// directory prints emptyMessage and returns nil. Only fs.ErrNotExist on either
-// openspec/schemas/ or the OpenSpec config file is treated as a soft failure;
-// every other I/O error is returned.
-func List(workingDir string, stdout io.Writer) error {
+// NAME/ACTIVE/TRACKED/SOURCE/SHA/UPSTREAM table to stdout. Missing or empty
+// schemas directory prints emptyMessage and returns nil. Only fs.ErrNotExist
+// on either openspec/schemas/ or the OpenSpec config file is treated as a
+// soft failure; every other I/O error is returned.
+//
+// When offline is true, no network lookups are performed and every tracked
+// row's UPSTREAM column reads "unknown". Otherwise client is used to resolve
+// each distinct tracked source at most once; any client error collapses the
+// row's UPSTREAM to "unknown" rather than aborting the command.
+func List(ctx context.Context, workingDir string, stdout io.Writer, client source.Client, offline bool) error {
 	schemasDir := filepath.Join(workingDir, "openspec", "schemas")
 	entries, err := os.ReadDir(schemasDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -53,8 +67,41 @@ func List(workingDir string, stdout io.Writer) error {
 		return err
 	}
 
+	// upstreamCache memoises LatestSHA results by manifest.Source string so
+	// schemas from the same upstream share one network call within this
+	// invocation. The zero string and error are both meaningful: a non-nil
+	// error means we resolved this source to "unknown" and any further row
+	// from the same source must read the same value.
+	type cached struct {
+		sha string
+		err error
+	}
+	upstreamCache := map[string]cached{}
+	resolveUpstream := func(manifestSource string) string {
+		if offline || client == nil {
+			return upstreamUnknown
+		}
+		if hit, ok := upstreamCache[manifestSource]; ok {
+			if hit.err != nil {
+				return upstreamUnknown
+			}
+			return hit.sha
+		}
+		ref, err := source.ParseRef(manifestSource)
+		if err != nil {
+			upstreamCache[manifestSource] = cached{err: err}
+			return upstreamUnknown
+		}
+		sha, err := client.LatestSHA(ctx, ref)
+		upstreamCache[manifestSource] = cached{sha: sha, err: err}
+		if err != nil {
+			return upstreamUnknown
+		}
+		return sha
+	}
+
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED\tSOURCE\tSHA"); err != nil {
+	if _, err := fmt.Fprintln(tw, "NAME\tACTIVE\tTRACKED\tSOURCE\tSHA\tUPSTREAM"); err != nil {
 		return err
 	}
 	for _, name := range names {
@@ -63,18 +110,29 @@ func List(workingDir string, stdout io.Writer) error {
 			activeCol = "*"
 		}
 		tracked := "no"
-		source, sha := "", ""
+		source, sha, upstream := "", "", ""
 		schemaDir := filepath.Join(schemasDir, name)
 		if m, err := install.ReadManifest(schemaDir); err == nil {
 			tracked = "yes"
 			source = m.Source
 			sha = shortSHA(m.SHA)
+			latest := resolveUpstream(m.Source)
+			switch latest {
+			case upstreamUnknown:
+				upstream = upstreamUnknown
+			case m.SHA:
+				upstream = upstreamUpToDate
+			default:
+				upstream = upstreamBehind
+			}
 		} else if !errors.Is(err, fs.ErrNotExist) {
 			// Manifest exists but is unreadable/unparseable: mark tracked
-			// (the file is present) but leave source/sha blank.
+			// (the file is present) but leave source/sha blank. Without a
+			// readable source we cannot resolve upstream, so report unknown.
 			tracked = "yes"
+			upstream = upstreamUnknown
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", name, activeCol, tracked, source, sha); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", name, activeCol, tracked, source, sha, upstream); err != nil {
 			return err
 		}
 	}

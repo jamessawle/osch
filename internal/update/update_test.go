@@ -33,6 +33,10 @@ func (f *fakeClient) FetchSchemaFiles(_ context.Context, _ source.Ref, _, _ stri
 	return f.files, nil
 }
 
+func (f *fakeClient) LatestSHA(_ context.Context, _ source.Ref) (string, error) {
+	return f.sha, nil
+}
+
 func factoryFor(c source.Client) ClientFactory {
 	return func(source.Ref) (source.Client, error) { return c, nil }
 }
