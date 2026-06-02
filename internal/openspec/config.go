@@ -18,6 +18,11 @@ import (
 // Filename is the basename of the OpenSpec project config inside `openspec/`.
 const Filename = "config.yaml"
 
+// DefaultSchema is OpenSpec's built-in schema name. `osch remove` falls back to
+// this value when it has just deleted the currently active schema so the
+// project is never left pointing at a missing folder.
+const DefaultSchema = "spec-driven"
+
 // Path returns the conventional config path for workingDir.
 func Path(workingDir string) string {
 	return filepath.Join(workingDir, "openspec", Filename)
