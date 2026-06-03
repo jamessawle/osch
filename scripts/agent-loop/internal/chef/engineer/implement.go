@@ -181,24 +181,34 @@ func formatFailures(fs []checkFailure) string {
 
 func buildImplementPrompt(in ImplementInput, checks []string, failingChecks string) string {
 	var b strings.Builder
-	b.WriteString("Task: ")
+	b.WriteString("You are implementing GitHub issue #")
+	b.WriteString(in.TaskRef.ID)
+	b.WriteString(".\n\nIssue title: ")
 	b.WriteString(in.Title)
-	b.WriteString("\n\nDescription:\n")
+	b.WriteString("\n\nIssue body:\n")
 	b.WriteString(in.Description)
 	b.WriteString("\n")
 	if in.Specification != "" {
-		b.WriteString("\nSpecification:\n")
+		b.WriteString("\nAgent brief (authoritative specification):\n")
 		b.WriteString(in.Specification)
-		b.WriteString("\n")
+		b.WriteString("\n\nThe agent brief is the exclusive source of truth. Where it disagrees with the issue body on any specific value, the brief wins.\n")
 	}
-	b.WriteString("\nWhen finished, verify your work by running:\n")
+	b.WriteString("\nInstructions:\n")
+	b.WriteString("- Read CLAUDE.md in the repo root for project conventions.\n")
+	b.WriteString("- Make the edits the issue requires.\n")
+	b.WriteString("- Stage and commit your changes with a Conventional Commits message (e.g. 'feat:', 'fix:', 'chore:', 'docs:'). Reference the issue with 'Refs #")
+	b.WriteString(in.TaskRef.ID)
+	b.WriteString("' in the commit body.\n")
+	b.WriteString("- DO NOT push the branch and DO NOT open a pull request — the calling process will handle that.\n")
+	b.WriteString("- Before your final commit, walk the brief's `Acceptance criteria` list AC-by-AC. For each item, identify the specific line of code or test that satisfies it.\n\n")
+	b.WriteString("After committing, verify your work by running these checks (they must all pass):\n")
 	for _, c := range checks {
 		b.WriteString("  $ ")
 		b.WriteString(c)
 		b.WriteString("\n")
 	}
 	if failingChecks != "" {
-		b.WriteString("\nPrior attempt left the following checks failing. Fix them:\n")
+		b.WriteString("\nPrior attempt left the following checks failing. Fix them and commit the fix:\n")
 		b.WriteString(failingChecks)
 	}
 	return b.String()
