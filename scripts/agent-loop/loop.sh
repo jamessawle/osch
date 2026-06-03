@@ -30,6 +30,11 @@ REPO_NAME="$(basename "$REPO_ROOT")"
 # See README.md ("Permissions") for the rationale.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENT_SETTINGS="${SCRIPT_DIR}/settings.json"
+# Helper settings (PR-desc + PR-title invocations) loosen the impl sandbox to
+# permit the `pr-management:write-pr-description` Skill and read-only
+# `gh issue view`/`gh issue list` — both denied for impl runs and both needed
+# to produce a good PR body. All mutating gh commands stay denied.
+HELPER_SETTINGS="${SCRIPT_DIR}/helper-settings.json"
 
 # --- Helpers -----------------------------------------------------------------
 
@@ -72,6 +77,8 @@ gh auth status >/dev/null 2>&1 || die "gh is not authenticated. Run 'gh auth log
 # rather than discover it after a runaway agent has escaped.
 [ -f "$AGENT_SETTINGS" ] || die "agent settings file not found: $AGENT_SETTINGS"
 jq empty "$AGENT_SETTINGS" >/dev/null 2>&1 || die "agent settings file is not valid JSON: $AGENT_SETTINGS"
+[ -f "$HELPER_SETTINGS" ] || die "helper settings file not found: $HELPER_SETTINGS"
+jq empty "$HELPER_SETTINGS" >/dev/null 2>&1 || die "helper settings file is not valid JSON: $HELPER_SETTINGS"
 
 # --- Failure handling --------------------------------------------------------
 
@@ -150,8 +157,9 @@ ${body}
 ${brief_block}
 
 Instructions:
-- Read CLAUDE.md in the repo root for project conventions.
 - Make the edits the issue requires.
+- If the change adds or modifies a user-facing command, update README.md under Usage in the same PR.
+- Architectural context lives in docs/adr/; consult it when a decision feels load-bearing.
 - Run any relevant local checks (build, tests, gofmt, vet).
 - Commit your changes with Conventional Commit messages (e.g. 'feat:', 'fix:', 'chore:', 'docs:'). Reference the issue with 'Refs #${n}' in the commit body.
 - Before your final commit, walk the brief's \`Acceptance criteria\` list AC-by-AC. For each item, identify the specific line of code or test that satisfies it. If you can't, the item is not yet done.
@@ -215,7 +223,7 @@ The description should cover: what changed and why (not a diff restatement), the
 EOF
 )"
 
-    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$AGENT_SETTINGS" "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
+    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$HELPER_SETTINGS" "$pr_prompt") >"$pr_body_file" 2>/dev/null; then
         log "WARN: PR description generation failed; falling back to minimal body"
         printf 'Implements #%s.\n' "$n" > "$pr_body_file"
     fi
@@ -240,7 +248,7 @@ Generate a single Conventional Commits PR title for the commits on the current b
 
 Requirements:
 - Format: type(scope)?: subject  (scope optional)
-- Allowed types are listed in CONTRIBUTING.md at the repo root — read it.
+- Allowed types: feat, fix, chore, docs, refactor, test, ci, build, revert.
 - Subject in lowercase, no trailing period, no issue number suffix.
 - Hard cap at 72 characters for the whole header.
 
@@ -249,7 +257,7 @@ EOF
 )"
 
     local pr_title
-    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$AGENT_SETTINGS" "$title_prompt") >"$pr_title_file" 2>/dev/null; then
+    if ! (cd "$worktree" && claude -p --permission-mode dontAsk --settings "$HELPER_SETTINGS" "$title_prompt") >"$pr_title_file" 2>/dev/null; then
         log "WARN: PR title generation failed; falling back to chore-prefixed issue title"
         printf 'chore: %s\n' "$title" > "$pr_title_file"
     fi
