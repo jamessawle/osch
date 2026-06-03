@@ -81,7 +81,7 @@ func TestUpdateRefreshesToNewSHA(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func TestUpdateNoOpWhenAlreadyUpToDate(t *testing.T) {
 		files: map[string][]byte{"unused.json": []byte("nope")},
 	}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	if client.fetchCalls != 0 {
@@ -168,7 +168,7 @@ func TestUpdateMissingSchema(t *testing.T) {
 	workDir := t.TempDir()
 	client := &fakeClient{sha: "x", names: []string{"widget"}}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected error when schema is not installed")
 	}
@@ -185,7 +185,7 @@ func TestUpdateMissingManifest(t *testing.T) {
 	}
 	client := &fakeClient{sha: "x", names: []string{"widget"}}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected error when manifest is missing")
 	}
@@ -211,7 +211,7 @@ func TestUpdateAddsAndRemovesFiles(t *testing.T) {
 		},
 	}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
@@ -315,7 +315,7 @@ func TestUpdateRefusesWhenFileEdited(t *testing.T) {
 
 	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -345,7 +345,7 @@ func TestUpdateRefusesWhenFileDeleted(t *testing.T) {
 
 	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -371,7 +371,7 @@ func TestUpdateRefusesWhenExtraFile(t *testing.T) {
 
 	client := &fakeClient{sha: "newsha", files: map[string][]byte{"a.json": []byte("upstream\n")}}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -401,7 +401,7 @@ func TestUpdatePropagatesUpstreamResolveError(t *testing.T) {
 	})
 	client := &failingListClient{listErr: errors.New("network down")}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected error when upstream HEAD resolve fails")
 	}
@@ -439,7 +439,7 @@ func TestUpdateCreatesSnapshotBeforeOverwrite(t *testing.T) {
 		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
 	}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -474,7 +474,7 @@ func TestUpdateNoOpDoesNotSnapshot(t *testing.T) {
 	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
 	client := &fakeClient{sha: "samesha", names: []string{"widget"}}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, install.SnapshotDir)); !os.IsNotExist(err) {
@@ -509,7 +509,7 @@ func TestUpdateSnapshotExcludesNestedSnapshotDir(t *testing.T) {
 		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
 	}
 	var buf bytes.Buffer
-	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -558,7 +558,7 @@ func TestUpdateAbortsWhenSnapshotFails(t *testing.T) {
 		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
 	}
 	var buf bytes.Buffer
-	err = Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	err = Update(context.Background(), factoryFor(client), workDir, "widget", false, &buf)
 	if err == nil {
 		t.Fatal("expected error when snapshot creation fails")
 	}
@@ -576,8 +576,175 @@ func TestUpdateAbortsWhenSnapshotFails(t *testing.T) {
 func TestUpdateRejectsInvalidName(t *testing.T) {
 	client := &fakeClient{sha: "x"}
 	var buf bytes.Buffer
-	err := Update(context.Background(), factoryFor(client), t.TempDir(), "../escape", &buf)
+	err := Update(context.Background(), factoryFor(client), t.TempDir(), "../escape", false, &buf)
 	if err == nil {
 		t.Fatal("expected error for invalid schema name")
+	}
+}
+
+func TestUpdateForceWithEditedFilesSucceedsAndSnapshotsOriginal(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json": []byte("alpha\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	if err := os.WriteFile(filepath.Join(dir, "a.json"), []byte("EDITED\n"), 0o644); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+
+	fixed := time.Date(2026, 6, 3, 14, 30, 12, 0, time.UTC)
+	prev := snapshotClock
+	snapshotClock = func() time.Time { return fixed }
+	t.Cleanup(func() { snapshotClock = prev })
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{"a.json": []byte("UPSTREAM\n")},
+	}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", true, &buf); err != nil {
+		t.Fatalf("force update: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "a.json"))
+	if err != nil || string(got) != "UPSTREAM\n" {
+		t.Errorf("a.json = %q err=%v, want UPSTREAM", got, err)
+	}
+	snap := filepath.Join(dir, install.SnapshotDir, "20260603T143012Z", "a.json")
+	snapGot, err := os.ReadFile(snap)
+	if err != nil || string(snapGot) != "EDITED\n" {
+		t.Errorf("snapshot a.json = %q err=%v, want EDITED (the user's pre-update bytes)", snapGot, err)
+	}
+	if !strings.Contains(buf.String(), filepath.Join(dir, install.SnapshotDir, "20260603T143012Z")) {
+		t.Errorf("stdout %q should print snapshot path", buf.String())
+	}
+}
+
+func TestUpdateForceWithExtraFilesSucceedsAndPrunesExtras(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json": []byte("alpha\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	if err := os.WriteFile(filepath.Join(dir, "extra.txt"), []byte("untracked\n"), 0o644); err != nil {
+		t.Fatalf("write extra: %v", err)
+	}
+
+	fixed := time.Date(2026, 6, 3, 14, 30, 12, 0, time.UTC)
+	prev := snapshotClock
+	snapshotClock = func() time.Time { return fixed }
+	t.Cleanup(func() { snapshotClock = prev })
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{"a.json": []byte("UPSTREAM\n")},
+	}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", true, &buf); err != nil {
+		t.Fatalf("force update: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "extra.txt")); !os.IsNotExist(err) {
+		t.Errorf("extra.txt should have been pruned; stat err=%v", err)
+	}
+	snapExtra := filepath.Join(dir, install.SnapshotDir, "20260603T143012Z", "extra.txt")
+	got, err := os.ReadFile(snapExtra)
+	if err != nil || string(got) != "untracked\n" {
+		t.Errorf("snapshot extra.txt = %q err=%v, want untracked", got, err)
+	}
+}
+
+func TestUpdateForceWithMissingTrackedFileRestoresUpstream(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json":     []byte("alpha\n"),
+		"sub/b.yaml": []byte("b: 1\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	if err := os.Remove(filepath.Join(dir, "sub", "b.yaml")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{
+			"a.json":     []byte("alpha\n"),
+			"sub/b.yaml": []byte("b: 2\n"),
+		},
+	}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", true, &buf); err != nil {
+		t.Fatalf("force update: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "sub", "b.yaml"))
+	if err != nil || string(got) != "b: 2\n" {
+		t.Errorf("sub/b.yaml = %q err=%v, want upstream restored", got, err)
+	}
+}
+
+func TestUpdateForceOnCleanSchemaBehavesLikeNoFlag(t *testing.T) {
+	build := func(t *testing.T) (string, *fakeClient) {
+		t.Helper()
+		work := t.TempDir()
+		seed(t, work, "widget", "oldsha", map[string][]byte{
+			"a.json": []byte("alpha\n"),
+		})
+		client := &fakeClient{
+			sha:   "newsha",
+			names: []string{"widget"},
+			files: map[string][]byte{"a.json": []byte("UPSTREAM\n")},
+		}
+		return work, client
+	}
+
+	workA, clientA := build(t)
+	var bufA bytes.Buffer
+	if err := Update(context.Background(), factoryFor(clientA), workA, "widget", false, &bufA); err != nil {
+		t.Fatalf("no-flag update: %v", err)
+	}
+	workB, clientB := build(t)
+	var bufB bytes.Buffer
+	if err := Update(context.Background(), factoryFor(clientB), workB, "widget", true, &bufB); err != nil {
+		t.Fatalf("force update: %v", err)
+	}
+
+	gotA, _ := os.ReadFile(filepath.Join(workA, "openspec", "schemas", "widget", "a.json"))
+	gotB, _ := os.ReadFile(filepath.Join(workB, "openspec", "schemas", "widget", "a.json"))
+	if !bytes.Equal(gotA, gotB) {
+		t.Errorf("force on clean diverged from no-flag: %q vs %q", gotA, gotB)
+	}
+	mA, err := install.ReadManifest(filepath.Join(workA, "openspec", "schemas", "widget"))
+	if err != nil {
+		t.Fatalf("read manifest A: %v", err)
+	}
+	mB, err := install.ReadManifest(filepath.Join(workB, "openspec", "schemas", "widget"))
+	if err != nil {
+		t.Fatalf("read manifest B: %v", err)
+	}
+	if mA.SHA != mB.SHA {
+		t.Errorf("SHA diverged: %q vs %q", mA.SHA, mB.SHA)
+	}
+}
+
+func TestUpdateForceDoesNotMaskUpstreamResolveError(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"a.json": []byte("alpha\n"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	// Edit so that without --force we'd refuse before resolving upstream;
+	// with --force the resolve error must still propagate.
+	if err := os.WriteFile(filepath.Join(dir, "a.json"), []byte("EDITED\n"), 0o644); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	client := &failingListClient{listErr: errors.New("network down")}
+	var buf bytes.Buffer
+	err := Update(context.Background(), factoryFor(client), workDir, "widget", true, &buf)
+	if err == nil {
+		t.Fatal("expected error when upstream resolve fails under --force")
+	}
+	if !strings.Contains(err.Error(), "network down") {
+		t.Errorf("error %q should wrap underlying cause", err.Error())
 	}
 }

@@ -2,8 +2,8 @@
 // installed schema by replacing its files with the upstream default-branch
 // HEAD bytes and rewriting the per-schema manifest. Update refuses (offline,
 // before any network call) to overwrite a schema whose local files have
-// drifted from the recorded hashes; a `--force` override is left for a
-// later slice.
+// drifted from the recorded hashes; passing force=true skips that refusal
+// (the always-on snapshot still captures the pre-update state).
 package update
 
 import (
@@ -30,7 +30,7 @@ type ClientFactory func(ref source.Ref) (source.Client, error)
 // Update refreshes workingDir/openspec/schemas/<name>/ to the upstream
 // default branch HEAD. When the pinned SHA already matches upstream the
 // command is a no-op and nothing on disk is touched.
-func Update(ctx context.Context, factory ClientFactory, workingDir, name string, stdout io.Writer) error {
+func Update(ctx context.Context, factory ClientFactory, workingDir, name string, force bool, stdout io.Writer) error {
 	if err := remove.ValidateName(name); err != nil {
 		return err
 	}
@@ -55,12 +55,14 @@ func Update(ctx context.Context, factory ClientFactory, workingDir, name string,
 		return fmt.Errorf("manifest source %q is not a valid repository: %w", manifest.Source, err)
 	}
 
-	offenders, err := install.CheckLocalFiles(targetDir, manifest)
-	if err != nil {
-		return fmt.Errorf("checking local modifications for %s: %w", name, err)
-	}
-	if len(offenders) > 0 {
-		return fmt.Errorf("schema %q has local modifications; refusing to overwrite:\n  %s", name, strings.Join(offenders, "\n  "))
+	if !force {
+		offenders, err := install.CheckLocalFiles(targetDir, manifest)
+		if err != nil {
+			return fmt.Errorf("checking local modifications for %s: %w", name, err)
+		}
+		if len(offenders) > 0 {
+			return fmt.Errorf("schema %q has local modifications; refusing to overwrite:\n  %s", name, strings.Join(offenders, "\n  "))
+		}
 	}
 
 	client, err := factory(ref)
