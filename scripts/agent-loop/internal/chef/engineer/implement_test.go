@@ -116,6 +116,17 @@ func (f *fakeGH) CommentIssue(_ context.Context, _, _ string, body string) error
 	return nil
 }
 
+type fakeGHCapture struct {
+	pr      engineer.PRInfo
+	capture *engineer.CreatePROpts
+}
+
+func (f *fakeGHCapture) CreatePR(_ context.Context, _ string, opts engineer.CreatePROpts) (engineer.PRInfo, error) {
+	*f.capture = opts
+	return f.pr, nil
+}
+func (f *fakeGHCapture) CommentIssue(_ context.Context, _, _ string, _ string) error { return nil }
+
 func newDeps(claude *fakeClaude, sh *fakeShell, git *fakeGit, gh *fakeGH) engineer.Deps {
 	return engineer.Deps{Claude: claude, Shell: sh, Git: git, GH: gh}
 }
@@ -421,4 +432,56 @@ func TestRunImplement_PRCreateFailure(t *testing.T) {
 	require.Error(t, err)
 	require.Len(t, gh.comments, 1)
 	assert.Contains(t, gh.comments[0], "403")
+}
+
+func TestRunImplement_PRBodyFallback(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "400")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{
+		{Output: "impl ok"},
+		{Output: "", Err: errExitNonZero},
+		{Output: "feat: x"},
+	}}
+	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 1}}
+	var captured engineer.CreatePROpts
+	gh := &fakeGHCapture{pr: engineer.PRInfo{Number: 1}, capture: &captured}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "400"},
+		Title:    "T",
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, captured.Body, "Implements #400")
+}
+
+func TestRunImplement_PRTitleFallback(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "401")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{
+		{Output: "impl"},
+		{Output: "body"},
+		{Output: "", Err: errExitNonZero},
+	}}
+	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 1}}
+	var captured engineer.CreatePROpts
+	gh := &fakeGHCapture{pr: engineer.PRInfo{Number: 1}, capture: &captured}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "401"},
+		Title:    "Original title",
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "chore: Original title", captured.Title)
 }
