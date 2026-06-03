@@ -122,8 +122,8 @@ func List(ctx context.Context, workingDir string, stdout io.Writer, client sourc
 			tracked = "yes"
 			source = m.Source
 			sha = shortSHA(m.SHA)
-			clean, ferr := install.CheckLocalFiles(schemaDir, m)
-			if ferr != nil || !clean {
+			offenders, ferr := install.CheckLocalFiles(schemaDir, m)
+			if ferr != nil || len(offenders) > 0 {
 				files = filesModified
 			} else {
 				files = filesClean

@@ -64,7 +64,9 @@ If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installe
 osch update <schema>
 ```
 
-Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "already up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit. This slice always overwrites local edits — refusing to overwrite modified files lands in a follow-up.
+Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "already up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit.
+
+Before any network call, `osch update` checks the local schema against the per-file SHA-256 hashes in `.osch.json`. If any tracked file's content has changed, a tracked file is missing, or an extra untracked file is present (excluding `.osch.json`), the command aborts with a non-zero exit and an error that lists every offending path. No files are written, deleted, or otherwise touched on refusal. The check is fully offline — a refusal makes zero upstream calls. A `--force` override lands in a follow-up.
 
 ### Remove an installed schema
 

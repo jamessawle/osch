@@ -1,7 +1,8 @@
 // Package update implements `osch update <schema>`: refresh a single
 // installed schema by replacing its files with the upstream default-branch
-// HEAD bytes and rewriting the per-schema manifest. This first slice is
-// destructive by design — refusing to overwrite local edits lands in a
+// HEAD bytes and rewriting the per-schema manifest. Update refuses (offline,
+// before any network call) to overwrite a schema whose local files have
+// drifted from the recorded hashes; a `--force` override is left for a
 // later slice.
 package update
 
@@ -13,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jamessawle/osch/internal/install"
 	"github.com/jamessawle/osch/internal/remove"
@@ -53,6 +55,14 @@ func Update(ctx context.Context, factory ClientFactory, workingDir, name string,
 		return fmt.Errorf("manifest source %q is not a valid repository: %w", manifest.Source, err)
 	}
 
+	offenders, err := install.CheckLocalFiles(targetDir, manifest)
+	if err != nil {
+		return fmt.Errorf("checking local modifications for %s: %w", name, err)
+	}
+	if len(offenders) > 0 {
+		return fmt.Errorf("schema %q has local modifications; refusing to overwrite:\n  %s", name, strings.Join(offenders, "\n  "))
+	}
+
 	client, err := factory(ref)
 	if err != nil {
 		return err
@@ -60,7 +70,7 @@ func Update(ctx context.Context, factory ClientFactory, workingDir, name string,
 
 	newSHA, _, err := client.ListSchemas(ctx, ref)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolving upstream HEAD for schema %q (%s): %w", name, ref.String(), err)
 	}
 	if newSHA == manifest.SHA {
 		_, err := fmt.Fprintf(stdout, "%s is already up to date at %s\n", name, manifest.SHA)

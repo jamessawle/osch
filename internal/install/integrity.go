@@ -7,27 +7,31 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
-// CheckLocalFiles reports whether the files on disk under schemaDir match the
-// per-file SHA-256 hashes recorded in m.Files (ADR 0006). The manifest file
-// itself is excluded from the comparison.
+// CheckLocalFiles compares the files on disk under schemaDir against the
+// per-file SHA-256 hashes recorded in m.Files (ADR 0006) and returns the
+// forward-slash relative paths of any offenders. The manifest file itself is
+// excluded from the comparison.
 //
-// A return of (true, nil) means every tracked file's hash matches and no extra
-// files are present. Any of the following collapse to (false, nil): an empty
-// or missing m.Files map, a tracked file whose hash differs, a tracked file
-// missing locally, or an untracked file (not in m.Files and not the manifest)
-// found in the schema folder. An error is returned only for unexpected I/O
-// failures while walking or reading.
+// An empty slice means the schema is clean: every tracked file's hash matches
+// and no extra files are present. A non-empty slice (sorted) collects: tracked
+// files whose hash differs, tracked files missing locally, and untracked files
+// (not in m.Files and not the manifest) found in the schema folder. An error
+// is returned only for unexpected I/O failures while walking or reading.
 //
-// Exposed as a reusable function so `osch update` can decide whether a refresh
-// would clobber local edits.
-func CheckLocalFiles(schemaDir string, m Manifest) (bool, error) {
+// Exposed as a reusable helper so `osch list` can label drift and `osch
+// update` can refuse to clobber local edits.
+func CheckLocalFiles(schemaDir string, m Manifest) ([]string, error) {
 	if len(m.Files) == 0 {
-		return false, nil
+		// Pre-hash-era manifest: we have no recorded hashes to verify against,
+		// so we cannot prove the schema is clean. Return a synthetic offender
+		// so callers (list, update) treat the schema as dirty.
+		return []string{"(manifest records no file hashes)"}, nil
 	}
 	seen := make(map[string]bool, len(m.Files))
-	modified := false
+	var offenders []string
 	err := filepath.WalkDir(schemaDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -45,30 +49,28 @@ func CheckLocalFiles(schemaDir string, m Manifest) (bool, error) {
 		}
 		want, ok := m.Files[rel]
 		if !ok {
-			modified = true
+			offenders = append(offenders, rel)
 			return nil
 		}
+		seen[rel] = true
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", path, err)
 		}
 		h := sha256.Sum256(data)
 		if hex.EncodeToString(h[:]) != want {
-			modified = true
+			offenders = append(offenders, rel)
 		}
-		seen[rel] = true
 		return nil
 	})
 	if err != nil {
-		return false, err
-	}
-	if modified {
-		return false, nil
+		return nil, err
 	}
 	for rel := range m.Files {
 		if !seen[rel] {
-			return false, nil
+			offenders = append(offenders, rel)
 		}
 	}
-	return true, nil
+	sort.Strings(offenders)
+	return offenders, nil
 }

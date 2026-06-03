@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -32,15 +33,15 @@ func TestCheckLocalFilesClean(t *testing.T) {
 	writeAt(t, dir, "sub/b.yaml", b)
 	writeAt(t, dir, ManifestFile, []byte("{}"))
 
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
 		"a.json":     hashOf(a),
 		"sub/b.yaml": hashOf(b),
 	}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if !clean {
-		t.Errorf("expected clean=true")
+	if len(offenders) != 0 {
+		t.Errorf("expected no offenders, got %v", offenders)
 	}
 }
 
@@ -49,14 +50,14 @@ func TestCheckLocalFilesEdited(t *testing.T) {
 	original := []byte("alpha\n")
 	writeAt(t, dir, "a.json", []byte("EDITED\n"))
 
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
 		"a.json": hashOf(original),
 	}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if clean {
-		t.Errorf("expected clean=false for edited file")
+	if !reflect.DeepEqual(offenders, []string{"a.json"}) {
+		t.Errorf("offenders = %v, want [a.json]", offenders)
 	}
 }
 
@@ -65,14 +66,14 @@ func TestCheckLocalFilesMissing(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
 		"a.json": hashOf([]byte("alpha\n")),
 	}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if clean {
-		t.Errorf("expected clean=false for missing tracked file")
+	if !reflect.DeepEqual(offenders, []string{"a.json"}) {
+		t.Errorf("offenders = %v, want [a.json] for missing tracked file", offenders)
 	}
 }
 
@@ -82,14 +83,14 @@ func TestCheckLocalFilesExtra(t *testing.T) {
 	writeAt(t, dir, "a.json", a)
 	writeAt(t, dir, "extra.txt", []byte("not tracked\n"))
 
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
 		"a.json": hashOf(a),
 	}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if clean {
-		t.Errorf("expected clean=false for extra file")
+	if !reflect.DeepEqual(offenders, []string{"extra.txt"}) {
+		t.Errorf("offenders = %v, want [extra.txt]", offenders)
 	}
 }
 
@@ -99,14 +100,14 @@ func TestCheckLocalFilesManifestExcluded(t *testing.T) {
 	writeAt(t, dir, "a.json", a)
 	writeAt(t, dir, ManifestFile, []byte(`{"anything":"goes"}`))
 
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
 		"a.json": hashOf(a),
 	}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if !clean {
-		t.Errorf("manifest file should be excluded from comparison; got clean=false")
+	if len(offenders) != 0 {
+		t.Errorf("manifest file should be excluded; got offenders=%v", offenders)
 	}
 }
 
@@ -114,12 +115,12 @@ func TestCheckLocalFilesEmptyMap(t *testing.T) {
 	dir := t.TempDir()
 	writeAt(t, dir, "a.json", []byte("alpha\n"))
 
-	clean, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{}})
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{}})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if clean {
-		t.Errorf("empty Files map must report modified (pre-hash-era manifest)")
+	if len(offenders) == 0 {
+		t.Errorf("empty Files map with files on disk must report offenders")
 	}
 }
 
@@ -127,11 +128,11 @@ func TestCheckLocalFilesNilMap(t *testing.T) {
 	dir := t.TempDir()
 	writeAt(t, dir, "a.json", []byte("alpha\n"))
 
-	clean, err := CheckLocalFiles(dir, Manifest{})
+	offenders, err := CheckLocalFiles(dir, Manifest{})
 	if err != nil {
 		t.Fatalf("CheckLocalFiles: %v", err)
 	}
-	if clean {
-		t.Errorf("nil Files map must report modified")
+	if len(offenders) == 0 {
+		t.Errorf("nil Files map with files on disk must report offenders")
 	}
 }
