@@ -1,0 +1,48 @@
+package engineer
+
+import (
+	"context"
+
+	"github.com/jamessawle/osch/scripts/agent-loop/internal/chef"
+)
+
+// Run is the engineer Chef entry point. It dispatches on chit.Kind and
+// returns a Proof reflecting the outcome. A non-nil error returned from
+// Run signals a Chef-internal crash (not a Chit failure); the caller
+// should exit non-zero in that case.
+func Run(ctx context.Context, c chef.Chit, deps Deps) (chef.Proof, error) {
+	switch c.Kind {
+	case "implement":
+		return runImplementAsProof(ctx, c, deps)
+	default:
+		return chef.Proof{
+			Kind:    c.Kind,
+			Status:  chef.StatusFailed,
+			Message: "unsupported kind: " + c.Kind,
+		}, nil
+	}
+}
+
+func runImplementAsProof(ctx context.Context, c chef.Chit, deps Deps) (chef.Proof, error) {
+	in := ImplementInput{
+		TaskRef:       TaskRef{Source: c.Task.Ref.Source, ID: c.Task.Ref.ID},
+		Title:         c.Task.Title,
+		Description:   c.Task.Description,
+		Specification: c.Task.Specification,
+		RepoPath:      c.Repo.Path,
+	}
+	res, err := RunImplement(ctx, in, deps)
+	if err != nil {
+		return chef.Proof{
+			Kind:       "implement",
+			Status:     chef.StatusFailed,
+			Message:    err.Error(),
+			OutputTail: lastTail(err),
+		}, nil
+	}
+	return chef.Proof{
+		Kind:   "implement",
+		Status: chef.StatusOK,
+		PR:     &chef.ProofPR{URL: res.PR.URL, Number: res.PR.Number},
+	}, nil
+}
