@@ -26,11 +26,7 @@ jobs:
             ci
             build
             revert
-          requireScope: false
           subjectPattern: ^.{1,64}$
           subjectPatternError: |
             The PR title subject (everything after `type(scope):`) must be 1-64
             characters, keeping the full header under 72.
-          headerPattern: '^(\w+)(?:\(([\w\-\.\/]+)\))?: (.+)$'
-          headerPatternCorrespondence: type, scope, subject
-          validateSingleCommit: false
