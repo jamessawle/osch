@@ -1,0 +1,11 @@
+scripts/agent-loop/internal/chef/wire.go
+  ai_agent 1-54
+scripts/agent-loop/internal/chef/wire_test.go
+  ai_agent 1-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "bea331b09b9b7eb7aba15d1561417a5bf9c149ab",
+  "prompts": {}
+}
