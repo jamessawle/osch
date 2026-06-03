@@ -1,0 +1,23 @@
+go.sum
+  ai_agent 88-89,549-550,562
+scripts/agent-loop/internal/chef/engineer/implement_test.go
+  ai_agent 1-4,6-13,16-38,40-48,53-87,105-118,132,134-142,145-151,153-180,182-185,187-224,226-255,257-302,304-311,313-318,320-329,331-340,342-351,353-361,363-372,374-381,383-392,394-407,409-418,420-430,432-441,443-457,459-467,469-483,485-489
+scripts/agent-loop/internal/chef/engineer/git_test.go
+  ai_agent 1-3,5-12,14,16-19,23-35
+scripts/agent-loop/internal/chef/engineer/engineer.go
+  ai_agent 11,63-74
+scripts/agent-loop/internal/chef/engineer/git.go
+  ai_agent 1-3,5-6,8,10-29,35-36,38-40,44-51,54-57,59-104
+scripts/agent-loop/internal/chef/engineer/engineer_test.go
+  ai_agent 24,29-33
+go.mod
+  ai_agent 12,15
+scripts/agent-loop/internal/chef/engineer/implement.go
+  ai_agent 1-39,43,49-58,64-190,194,196-198,200,212-217,219-224,232-234,254-256,270,274-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "e34ea8fb4b7249499346b83326507a5e9f1597a5",
+  "prompts": {}
+}

@@ -1,0 +1,13 @@
+scripts/agent-loop/internal/chef/engineer/claude_test.go
+  ai_agent 1-17
+scripts/agent-loop/internal/chef/engineer/settings.json
+  ai_agent 1-30
+scripts/agent-loop/internal/chef/engineer/claude.go
+  ai_agent 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "af93cc457b329109e4c77cf35ad5e135b5f0dbfb",
+  "prompts": {}
+}

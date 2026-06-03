@@ -1,0 +1,9 @@
+scripts/agent-loop/internal/chef/engineer/implement_test.go
+  ai_agent 1-4,6-13,16-38,40-48,53-102,104-112,115-121,123-150,152-155,157-194,196-225,227-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "ff8be4d228630e66f83e58e031c2cf418c81d5f4",
+  "prompts": {}
+}
