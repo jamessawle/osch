@@ -1,0 +1,247 @@
+package engineer
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+)
+
+const (
+	defaultBaseRef       = "main"
+	defaultRemote        = "origin"
+	defaultBaseBranch    = "main"
+	maxImplementAttempts = 3
+)
+
+// ImplementInput is the typed handler input. The wire layer translates
+// a Chit into this struct.
+type ImplementInput struct {
+	TaskRef       TaskRef
+	Title         string
+	Description   string
+	Specification string
+	RepoPath      string
+}
+
+// TaskRef identifies an external task (source + id).
+type TaskRef struct {
+	Source string
+	ID     string
+}
+
+// ImplementResult is the success outcome of a successful implement Chit.
+type ImplementResult struct {
+	PR PRInfo
+}
+
+// Deps bundles the external collaborators. Production wires real impls;
+// tests inject fakes.
+type Deps struct {
+	Claude ClaudeRunner
+	Shell  ShellRunner
+	Git    GitRunner
+	GH     GitHubClient
+}
+
+// RunImplement executes the implement Chit end-to-end. Returns a result
+// on success, or an error on Chit failure. The caller (engineer.Run)
+// translates the (result, error) pair into a Proof.
+func RunImplement(ctx context.Context, in ImplementInput, deps Deps) (ImplementResult, error) {
+	if in.TaskRef.Source != "github" {
+		return ImplementResult{}, fmt.Errorf("unsupported task ref source %q", in.TaskRef.Source)
+	}
+
+	layout := DeriveWorktreeLayout(in.RepoPath, in.TaskRef.ID)
+
+	if err := boardSetup(ctx, deps.Git, in.RepoPath, layout); err != nil {
+		postFailure(ctx, deps.GH, in, "board setup: "+err.Error(), "")
+		return ImplementResult{}, err
+	}
+
+	cfg, err := LoadConfig(layout.WorktreePath)
+	if err != nil {
+		postFailure(ctx, deps.GH, in, "config: "+err.Error(), "")
+		return ImplementResult{}, err
+	}
+
+	if err := runSetupCommands(ctx, deps.Shell, layout.WorktreePath, cfg.Setup); err != nil {
+		postFailure(ctx, deps.GH, in, "setup: "+err.Error(), lastTail(err))
+		return ImplementResult{}, err
+	}
+
+	if err := implementLoop(ctx, deps, in, layout, cfg); err != nil {
+		postFailure(ctx, deps.GH, in, "implement: "+err.Error(), lastTail(err))
+		return ImplementResult{}, err
+	}
+
+	body := generatePRBody(ctx, deps.Claude, in, layout)
+	title := generatePRTitle(ctx, deps.Claude, in, layout)
+
+	if err := deps.Git.Push(ctx, layout.WorktreePath, defaultRemote, layout.BranchName); err != nil {
+		postFailure(ctx, deps.GH, in, "push: "+err.Error(), "")
+		return ImplementResult{}, err
+	}
+
+	pr, err := deps.GH.CreatePR(ctx, layout.WorktreePath, CreatePROpts{
+		Title:   title,
+		Body:    body + "\n\nCloses #" + in.TaskRef.ID,
+		BaseRef: defaultBaseBranch,
+		HeadRef: layout.BranchName,
+		Labels:  []string{"agent:authored"},
+	})
+	if err != nil {
+		postFailure(ctx, deps.GH, in, "pr create: "+err.Error(), "")
+		return ImplementResult{}, err
+	}
+
+	return ImplementResult{PR: pr}, nil
+}
+
+func boardSetup(ctx context.Context, git GitRunner, repoPath string, layout WorktreeLayout) error {
+	if _, err := os.Stat(layout.WorktreePath); err == nil {
+		_ = git.WorktreeRemove(ctx, repoPath, layout.WorktreePath)
+	}
+	if err := git.Fetch(ctx, repoPath, defaultRemote, defaultBaseRef); err != nil {
+		return fmt.Errorf("fetch: %w", err)
+	}
+	if err := git.WorktreeAdd(ctx, repoPath, layout.WorktreePath, layout.BranchName, defaultRemote+"/"+defaultBaseRef); err != nil {
+		return fmt.Errorf("worktree add: %w", err)
+	}
+	return nil
+}
+
+func runSetupCommands(ctx context.Context, shell ShellRunner, workdir string, cmds []string) error {
+	for _, cmd := range cmds {
+		out, err := shell.Run(ctx, workdir, cmd)
+		if err != nil {
+			return tailErr(fmt.Errorf("%s: %w", cmd, err), out)
+		}
+	}
+	return nil
+}
+
+func implementLoop(ctx context.Context, deps Deps, in ImplementInput, layout WorktreeLayout, cfg Config) error {
+	var failingChecks string
+	for attempt := 1; attempt <= maxImplementAttempts; attempt++ {
+		prompt := buildImplementPrompt(in, cfg.Checks, failingChecks)
+		out, err := deps.Claude.Run(ctx, layout.WorktreePath, prompt)
+		if err != nil {
+			return tailErr(fmt.Errorf("claude attempt %d: %w", attempt, err), out)
+		}
+
+		failures := runChecks(ctx, deps.Shell, layout.WorktreePath, cfg.Checks)
+		if len(failures) == 0 {
+			break
+		}
+		failingChecks = formatFailures(failures)
+		if attempt == maxImplementAttempts {
+			return tailErr(errors.New("checks failing after max attempts"), failingChecks)
+		}
+	}
+
+	commits, err := deps.Git.CommitCount(ctx, layout.WorktreePath, defaultRemote+"/"+defaultBaseRef)
+	if err != nil {
+		return fmt.Errorf("commit count: %w", err)
+	}
+	if commits == 0 {
+		return errors.New("implement loop produced zero new commits")
+	}
+	return nil
+}
+
+type checkFailure struct {
+	Command string
+	Output  string
+}
+
+func runChecks(ctx context.Context, shell ShellRunner, workdir string, checks []string) []checkFailure {
+	var failures []checkFailure
+	for _, cmd := range checks {
+		out, err := shell.Run(ctx, workdir, cmd)
+		if err != nil {
+			failures = append(failures, checkFailure{Command: cmd, Output: out})
+		}
+	}
+	return failures
+}
+
+func formatFailures(fs []checkFailure) string {
+	var b strings.Builder
+	for _, f := range fs {
+		b.WriteString("--- FAILED: ")
+		b.WriteString(f.Command)
+		b.WriteString(" ---\n")
+		b.WriteString(f.Output)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func buildImplementPrompt(in ImplementInput, checks []string, failingChecks string) string {
+	var b strings.Builder
+	b.WriteString("Task: ")
+	b.WriteString(in.Title)
+	b.WriteString("\n\nDescription:\n")
+	b.WriteString(in.Description)
+	b.WriteString("\n")
+	if in.Specification != "" {
+		b.WriteString("\nSpecification:\n")
+		b.WriteString(in.Specification)
+		b.WriteString("\n")
+	}
+	b.WriteString("\nWhen finished, verify your work by running:\n")
+	for _, c := range checks {
+		b.WriteString("  $ ")
+		b.WriteString(c)
+		b.WriteString("\n")
+	}
+	if failingChecks != "" {
+		b.WriteString("\nPrior attempt left the following checks failing. Fix them:\n")
+		b.WriteString(failingChecks)
+	}
+	return b.String()
+}
+
+func generatePRBody(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
+	out, err := claude.Run(ctx, layout.WorktreePath, "Write a PR body for the implementation just completed for task: "+in.Title)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "Implements #" + in.TaskRef.ID + "."
+	}
+	return out
+}
+
+func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
+	out, err := claude.Run(ctx, layout.WorktreePath, "Write a one-line conventional-commits PR title for task: "+in.Title)
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "chore: " + in.Title
+	}
+	final, _ := ConformOrFallback(strings.TrimSpace(out), in.Title)
+	return final
+}
+
+func postFailure(ctx context.Context, gh GitHubClient, in ImplementInput, msg, tail string) {
+	body := "Agent loop failed: " + msg
+	if tail != "" {
+		body += "\n\n```\n" + tail + "\n```"
+	}
+	_ = gh.CommentIssue(ctx, in.RepoPath, in.TaskRef.ID, body)
+}
+
+type tailErrWrap struct {
+	err  error
+	tail string
+}
+
+func (t tailErrWrap) Error() string { return t.err.Error() }
+func (t tailErrWrap) Unwrap() error { return t.err }
+
+func tailErr(err error, tail string) error { return tailErrWrap{err: err, tail: tail} }
+func lastTail(err error) string {
+	var t tailErrWrap
+	if errors.As(err, &t) {
+		return t.tail
+	}
+	return ""
+}
