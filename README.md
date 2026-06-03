@@ -6,6 +6,19 @@
 
 `osch` is a command-line tool for managing [OpenSpec](https://github.com/Fission-AI/OpenSpec) schemas across repositories, giving you a single consistent workflow for working with specs wherever they live.
 
+## Quick start
+
+```bash
+# Install a schema from an upstream repository
+osch add <owner>/<repo>
+
+# List the schemas you've installed
+osch list
+
+# Refresh installed schemas to the latest upstream version
+osch update
+```
+
 ## Install
 
 ```
