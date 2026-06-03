@@ -1,0 +1,15 @@
+internal/update/update.go
+  ai_agent 5-6,33,58-65
+cmd/osch/cmd/update.go
+  ai_agent 10,15-19,22-23
+internal/update/update_test.go
+  ai_agent 84,145,171,188,214,318,348,374,404,442,477,512,561,579,584-748
+README.md
+  ai_agent 64,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "587d3dfc5868716852aaad3c0ae1c4266ae55bc7",
+  "prompts": {}
+}
