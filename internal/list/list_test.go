@@ -596,6 +596,23 @@ func TestListFilesEmptyMap(t *testing.T) {
 	}
 }
 
+func TestListFilesIgnoresSnapshotDir(t *testing.T) {
+	dir := t.TempDir()
+	mkSchemaWithFiles(t, dir, "widget", map[string][]byte{
+		"schema.json": []byte(`{"a":1}`),
+	})
+	schemaDir := filepath.Join(dir, "openspec", "schemas", "widget")
+	// Pre-update snapshot (and its self-ignoring marker) live under .osch/.
+	writeFile(t, filepath.Join(schemaDir, install.SnapshotDir, ".gitignore"), "*\n")
+	writeFile(t, filepath.Join(schemaDir, install.SnapshotDir, "20260603T143012Z", "schema.json"), `{"a":1}`)
+	writeFile(t, filepath.Join(schemaDir, install.SnapshotDir, "20260603T143012Z", install.ManifestFile), "{}\n")
+
+	out := runList(t, dir, nil, true)
+	if got := filesCol(t, out, "widget"); got != "clean" {
+		t.Errorf("FILES = %q, want clean (snapshots in .osch/ must not flag drift); full output:\n%s", got, out)
+	}
+}
+
 func TestListFilesUntrackedBlank(t *testing.T) {
 	dir := t.TempDir()
 	mkSchema(t, dir, "widget", false)

@@ -82,6 +82,11 @@ func Update(ctx context.Context, factory ClientFactory, workingDir, name string,
 		return err
 	}
 
+	snapPath, err := snapshotSchema(targetDir)
+	if err != nil {
+		return fmt.Errorf("snapshotting %s before update: %w", name, err)
+	}
+
 	hashes, err := install.WriteFiles(targetDir, files)
 	if err != nil {
 		return err
@@ -104,7 +109,10 @@ func Update(ctx context.Context, factory ClientFactory, workingDir, name string,
 		return err
 	}
 
-	_, err = fmt.Fprintf(stdout, "updated %s to %s\n", name, newSHA)
+	if _, err := fmt.Fprintf(stdout, "updated %s to %s\n", name, newSHA); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "snapshot saved to %s\n", snapPath)
 	return err
 }
 
@@ -125,6 +133,9 @@ func pruneStale(targetDir string, keep map[string][]byte) error {
 		}
 		if d.IsDir() {
 			if path != targetDir {
+				if d.Name() == install.SnapshotDir {
+					return filepath.SkipDir
+				}
 				dirs = append(dirs, path)
 			}
 			return nil
