@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
-	"strings"
 )
 
 // GitRunner is the interface that the engineer uses to drive git
@@ -38,9 +38,10 @@ func DeriveWorktreeLayout(repoPath, taskID, nonce string) WorktreeLayout {
 	}
 }
 
-// ConformOrFallback runs `conform` against the given title. If conform
-// rejects it, returns ("chore: <taskTitle>", true). Otherwise returns
-// the title unchanged with replaced=false.
+// ConformOrFallback runs `go tool conform` against the given title (conform
+// is a module tool dep in this repo, not a PATH binary). If conform accepts
+// the title it is returned unchanged; otherwise the function returns
+// ("chore: <taskTitle>", true).
 func ConformOrFallback(generated, taskTitle string) (string, bool) {
 	if err := runConform(generated); err == nil {
 		return generated, false
@@ -49,8 +50,28 @@ func ConformOrFallback(generated, taskTitle string) (string, bool) {
 }
 
 func runConform(title string) error {
-	cmd := exec.Command("conform", "enforce", "--commit-msg", title)
-	cmd.Stdin = strings.NewReader(title)
+	// conform reads .conform.yaml from cwd, so run from the repo root.
+	rootBytes, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return fmt.Errorf("find repo root: %w", err)
+	}
+	repoRoot := string(bytes.TrimSpace(rootBytes))
+
+	f, err := os.CreateTemp("", "brigade-conform-*.txt")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	if _, err := f.WriteString(title + "\n"); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	cmd := exec.Command("go", "tool", "conform", "enforce", "--commit-msg-file", f.Name())
+	cmd.Dir = repoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("conform rejected title: %s: %w", string(out), err)
 	}

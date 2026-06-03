@@ -254,6 +254,12 @@ func stripCodeFence(s string) string {
 }
 
 func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
+	// Prefer the issue title verbatim if the maintainer already wrote a valid
+	// Conventional Commits title — no point asking claude to re-derive what's
+	// already correct, and it avoids a double-prefix like "chore: docs(...)".
+	if final, replaced := ConformOrFallback(in.Title, in.Title); !replaced {
+		return final
+	}
 	prompt := "Generate a single Conventional Commits PR title for the commits on the current branch " +
 		"(compared to origin/main). The PR implements GitHub issue #" + in.TaskRef.ID + ": \"" + in.Title + "\".\n\n" +
 		"Requirements:\n" +
@@ -268,8 +274,7 @@ func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput
 			return final
 		}
 	}
-	// Generated title was rejected (or claude failed). Try the issue title itself before
-	// double-prefixing it with chore:.
+	// Both the issue title and the generated title were invalid.
 	final, _ := ConformOrFallback(in.Title, in.Title)
 	return final
 }

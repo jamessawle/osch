@@ -1,7 +1,6 @@
 package engineer_test
 
 import (
-	"os/exec"
 	"testing"
 
 	"github.com/jamessawle/osch/scripts/agent-loop/internal/chef/engineer"
@@ -17,9 +16,6 @@ func TestDeriveWorktreeLayout(t *testing.T) {
 
 func TestConformFallbackTitle(t *testing.T) {
 	t.Parallel()
-	if _, err := exec.LookPath("conform"); err != nil {
-		t.Skip("conform binary not on PATH")
-	}
 	t.Run("good title returned unchanged", func(t *testing.T) {
 		t.Parallel()
 		out, replaced := engineer.ConformOrFallback("feat: add thing", "Original task title")
