@@ -36,14 +36,17 @@ func CheckLocalFiles(schemaDir string, m Manifest) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			return nil
-		}
 		rel, err := filepath.Rel(schemaDir, path)
 		if err != nil {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			if rel == SnapshotDir {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if rel == ManifestFile {
 			return nil
 		}

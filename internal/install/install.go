@@ -22,6 +22,12 @@ import (
 // schema folder (see ADR 0005).
 const ManifestFile = ".osch.json"
 
+// SnapshotDir is the per-schema directory used to store local-only state
+// (pre-update snapshots and a self-ignoring .gitignore). It lives inside the
+// schema folder and is never committed; integrity checks and pruning must
+// ignore its contents entirely.
+const SnapshotDir = ".osch"
+
 // ManifestSchemaURL is the value written into the manifest's $schema field. It
 // names the manifest format; the URL is stable and intended to host the JSON
 // Schema once published.

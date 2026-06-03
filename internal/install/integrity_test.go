@@ -124,6 +124,27 @@ func TestCheckLocalFilesEmptyMap(t *testing.T) {
 	}
 }
 
+func TestCheckLocalFilesIgnoresSnapshotDir(t *testing.T) {
+	dir := t.TempDir()
+	a := []byte("alpha\n")
+	writeAt(t, dir, "a.json", a)
+	// Anything inside .osch/ — gitignore marker, timestamped backup, nested
+	// files — must not register as drift.
+	writeAt(t, dir, SnapshotDir+"/.gitignore", []byte("*\n"))
+	writeAt(t, dir, SnapshotDir+"/20260603T143012Z/a.json", []byte("PRE-UPDATE\n"))
+	writeAt(t, dir, SnapshotDir+"/20260603T143012Z/sub/x.yaml", []byte("y: 1\n"))
+
+	offenders, err := CheckLocalFiles(dir, Manifest{Files: map[string]string{
+		"a.json": hashOf(a),
+	}})
+	if err != nil {
+		t.Fatalf("CheckLocalFiles: %v", err)
+	}
+	if len(offenders) != 0 {
+		t.Errorf("expected no offenders with .osch/ present, got %v", offenders)
+	}
+}
+
 func TestCheckLocalFilesNilMap(t *testing.T) {
 	dir := t.TempDir()
 	writeAt(t, dir, "a.json", []byte("alpha\n"))

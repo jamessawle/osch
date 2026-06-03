@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jamessawle/osch/internal/install"
 	"github.com/jamessawle/osch/internal/source"
@@ -412,6 +413,163 @@ func TestUpdatePropagatesUpstreamResolveError(t *testing.T) {
 	}
 	if client.fetchCalls != 0 {
 		t.Errorf("FetchSchemaFiles should not be called when list fails; got %d", client.fetchCalls)
+	}
+}
+
+func TestUpdateCreatesSnapshotBeforeOverwrite(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"keep.json": []byte("KEEP-OLD"),
+		"drop.yaml": []byte("DROP-OLD"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	manifestBytes, err := os.ReadFile(filepath.Join(dir, install.ManifestFile))
+	if err != nil {
+		t.Fatalf("read pre-update manifest: %v", err)
+	}
+
+	fixed := time.Date(2026, 6, 3, 14, 30, 12, 0, time.UTC)
+	prev := snapshotClock
+	snapshotClock = func() time.Time { return fixed }
+	t.Cleanup(func() { snapshotClock = prev })
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
+	}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	snapDir := filepath.Join(dir, install.SnapshotDir, "20260603T143012Z")
+	got, err := os.ReadFile(filepath.Join(snapDir, "keep.json"))
+	if err != nil || string(got) != "KEEP-OLD" {
+		t.Errorf("snapshot keep.json = %q err=%v, want pre-update bytes", got, err)
+	}
+	got, err = os.ReadFile(filepath.Join(snapDir, "drop.yaml"))
+	if err != nil || string(got) != "DROP-OLD" {
+		t.Errorf("snapshot drop.yaml = %q err=%v, want pre-update bytes", got, err)
+	}
+	got, err = os.ReadFile(filepath.Join(snapDir, install.ManifestFile))
+	if err != nil || !bytes.Equal(got, manifestBytes) {
+		t.Errorf("snapshot manifest mismatch err=%v", err)
+	}
+
+	gi, err := os.ReadFile(filepath.Join(dir, install.SnapshotDir, ".gitignore"))
+	if err != nil || string(gi) != "*\n" {
+		t.Errorf(".osch/.gitignore = %q err=%v, want \"*\\n\"", gi, err)
+	}
+	if !strings.Contains(buf.String(), snapDir) {
+		t.Errorf("stdout %q should print snapshot path %s", buf.String(), snapDir)
+	}
+}
+
+func TestUpdateNoOpDoesNotSnapshot(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "samesha", map[string][]byte{
+		"keep.json": []byte("k"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	client := &fakeClient{sha: "samesha", names: []string{"widget"}}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, install.SnapshotDir)); !os.IsNotExist(err) {
+		t.Errorf(".osch/ should not exist after no-op update; stat err=%v", err)
+	}
+}
+
+func TestUpdateSnapshotExcludesNestedSnapshotDir(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"keep.json": []byte("KEEP-OLD"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	// Pre-existing snapshot from a previous update — must not be copied
+	// into the new snapshot.
+	priorSnap := filepath.Join(dir, install.SnapshotDir, "20260101T000000Z")
+	if err := os.MkdirAll(priorSnap, 0o755); err != nil {
+		t.Fatalf("mkdir prior snap: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(priorSnap, "evidence.txt"), []byte("prior"), 0o644); err != nil {
+		t.Fatalf("write prior: %v", err)
+	}
+
+	fixed := time.Date(2026, 6, 3, 14, 30, 12, 0, time.UTC)
+	prev := snapshotClock
+	snapshotClock = func() time.Time { return fixed }
+	t.Cleanup(func() { snapshotClock = prev })
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
+	}
+	var buf bytes.Buffer
+	if err := Update(context.Background(), factoryFor(client), workDir, "widget", &buf); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	snapDir := filepath.Join(dir, install.SnapshotDir, "20260603T143012Z")
+	if _, err := os.Stat(filepath.Join(snapDir, install.SnapshotDir)); !os.IsNotExist(err) {
+		t.Errorf("new snapshot should not nest .osch/; stat err=%v", err)
+	}
+	// Prior snapshot should still be there (pruneStale must not remove it).
+	if _, err := os.Stat(filepath.Join(priorSnap, "evidence.txt")); err != nil {
+		t.Errorf("prior snapshot wiped: %v", err)
+	}
+}
+
+func TestUpdateAbortsWhenSnapshotFails(t *testing.T) {
+	workDir := t.TempDir()
+	seed(t, workDir, "widget", "oldsha", map[string][]byte{
+		"keep.json": []byte("KEEP-OLD"),
+	})
+	dir := filepath.Join(workDir, "openspec", "schemas", "widget")
+	fixed := time.Date(2026, 6, 3, 14, 30, 12, 0, time.UTC)
+	prev := snapshotClock
+	snapshotClock = func() time.Time { return fixed }
+	t.Cleanup(func() { snapshotClock = prev })
+
+	// Plant a regular file where the timestamped snapshot folder would be so
+	// MkdirAll fails. CheckLocalFiles skips .osch/ recursively, so this does
+	// not register as drift.
+	if err := os.MkdirAll(filepath.Join(dir, install.SnapshotDir), 0o755); err != nil {
+		t.Fatalf("mkdir .osch: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, install.SnapshotDir, "20260603T143012Z"), []byte("blocked"), 0o644); err != nil {
+		t.Fatalf("plant blocker: %v", err)
+	}
+	keepBefore, err := os.ReadFile(filepath.Join(dir, "keep.json"))
+	if err != nil {
+		t.Fatalf("read keep.json: %v", err)
+	}
+	manifestBefore, mErr := os.ReadFile(filepath.Join(dir, install.ManifestFile))
+	if mErr != nil {
+		t.Fatalf("read manifest: %v", mErr)
+	}
+
+	client := &fakeClient{
+		sha:   "newsha",
+		names: []string{"widget"},
+		files: map[string][]byte{"keep.json": []byte("KEEP-NEW")},
+	}
+	var buf bytes.Buffer
+	err = Update(context.Background(), factoryFor(client), workDir, "widget", &buf)
+	if err == nil {
+		t.Fatal("expected error when snapshot creation fails")
+	}
+	if !strings.Contains(err.Error(), "snapshot") {
+		t.Errorf("error %q should mention snapshot failure", err.Error())
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "keep.json")); !bytes.Equal(got, keepBefore) {
+		t.Errorf("keep.json = %q, want %q (no overwrite on snapshot failure)", got, keepBefore)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, install.ManifestFile)); !bytes.Equal(got, manifestBefore) {
+		t.Errorf("manifest rewritten on snapshot failure")
 	}
 }
 
