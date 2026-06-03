@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 )
 
 // GitHubClient drives the gh CLI for PR creation and issue commenting.
@@ -44,30 +43,41 @@ func (r realGH) CreatePR(ctx context.Context, workdir string, opts CreatePROpts)
 	for _, l := range opts.Labels {
 		args = append(args, "--label", l)
 	}
-	cmd := exec.CommandContext(ctx, "gh", args...)
-	cmd.Dir = workdir
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = io.MultiWriter(&buf, r.stderr)
-	if err := cmd.Run(); err != nil {
-		return PRInfo{}, fmt.Errorf("gh pr create: %w: %s", err, buf.String())
-	}
-	url := strings.TrimSpace(buf.String())
-
-	lines := strings.Split(url, "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], "https://") {
-			url = lines[i]
-			break
-		}
+	// First create, then read back url+number via `gh pr view` against the
+	// branch we just pushed. gh pr create's --json flag is not universally
+	// supported across versions, but `gh pr view --json` is — and this also
+	// gives a typed source of truth instead of scraping a URL.
+	createCmd := exec.CommandContext(ctx, "gh", args...)
+	createCmd.Dir = workdir
+	var createOut bytes.Buffer
+	createErr := newTailBuffer()
+	createCmd.Stdout = &createOut
+	createCmd.Stderr = io.MultiWriter(createErr, r.stderr)
+	if err := createCmd.Run(); err != nil {
+		return PRInfo{}, fmt.Errorf("gh pr create: %w: %s", err, createErr.String())
 	}
 
-	parts := strings.Split(url, "/")
-	var number int
-	if len(parts) > 0 {
-		_ = json.Unmarshal([]byte(parts[len(parts)-1]), &number)
+	viewCmd := exec.CommandContext(ctx, "gh", "pr", "view", opts.HeadRef, "--json", "url,number")
+	viewCmd.Dir = workdir
+	var viewOut bytes.Buffer
+	viewErr := newTailBuffer()
+	viewCmd.Stdout = &viewOut
+	viewCmd.Stderr = io.MultiWriter(viewErr, r.stderr)
+	if err := viewCmd.Run(); err != nil {
+		return PRInfo{}, fmt.Errorf("gh pr view: %w: %s", err, viewErr.String())
 	}
-	return PRInfo{URL: url, Number: number}, nil
+
+	var parsed struct {
+		URL    string `json:"url"`
+		Number int    `json:"number"`
+	}
+	if err := json.Unmarshal(viewOut.Bytes(), &parsed); err != nil {
+		return PRInfo{}, fmt.Errorf("parse gh pr view output: %w", err)
+	}
+	if parsed.Number == 0 || parsed.URL == "" {
+		return PRInfo{}, fmt.Errorf("gh pr view returned empty url/number: %s", viewOut.String())
+	}
+	return PRInfo{URL: parsed.URL, Number: parsed.Number}, nil
 }
 
 func (r realGH) CommentIssue(ctx context.Context, repoPath, issueID, body string) error {

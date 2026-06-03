@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -36,16 +38,23 @@ type ImplementResult struct {
 	PR PRInfo
 }
 
+// TitleValidator returns nil if the title satisfies the project's
+// Conventional Commits policy. The default impl shells out to `go tool
+// conform`; tests inject a stub so they don't spawn processes.
+type TitleValidator func(ctx context.Context, repoPath, title string) error
+
 // Deps bundles the external collaborators. Production wires real impls;
 // tests inject fakes. NewRunID returns a per-run nonce used to stamp the
 // agent branch name so successive attempts against the same issue never
 // collide on a stale remote ref. If nil, a default ULID generator is used.
 type Deps struct {
-	Claude   ClaudeRunner
-	Shell    ShellRunner
-	Git      GitRunner
-	GH       GitHubClient
-	NewRunID func() string
+	Claude        ClaudeRunner
+	Shell         ShellRunner
+	Git           GitRunner
+	GH            GitHubClient
+	NewRunID      func() string
+	ValidateTitle TitleValidator
+	Stderr        io.Writer // optional; used for non-fatal warnings (post-failure errors, etc.)
 }
 
 // RunImplement executes the implement Chit end-to-end. Returns a result
@@ -60,55 +69,98 @@ func RunImplement(ctx context.Context, in ImplementInput, deps Deps) (ImplementR
 	if newRunID == nil {
 		newRunID = defaultRunID
 	}
+	validate := deps.ValidateTitle
+	if validate == nil {
+		validate = defaultTitleValidator
+	}
 	layout := DeriveWorktreeLayout(in.RepoPath, in.TaskRef.ID, newRunID())
 
 	if err := boardSetup(ctx, deps.Git, in.RepoPath, layout); err != nil {
-		postFailure(ctx, deps.GH, in, "board setup: "+err.Error(), "")
+		postFailure(ctx, deps, in, "board setup: "+err.Error(), "")
 		return ImplementResult{}, err
 	}
 
+	// On success, drop the worktree; on failure, leave it for debugging.
+	// The deferred-bool pattern keeps both paths in one place and avoids
+	// littering each early-return with cleanup.
+	succeeded := false
+	defer func() {
+		if succeeded {
+			_ = deps.Git.WorktreeRemove(ctx, in.RepoPath, layout.WorktreePath)
+		}
+	}()
+
 	cfg, err := LoadConfig(layout.WorktreePath)
 	if err != nil {
-		postFailure(ctx, deps.GH, in, "config: "+err.Error(), "")
+		postFailure(ctx, deps, in, "config: "+err.Error(), "")
 		return ImplementResult{}, err
 	}
 
 	if err := runSetupCommands(ctx, deps.Shell, layout.WorktreePath, cfg.Setup); err != nil {
-		postFailure(ctx, deps.GH, in, "setup: "+err.Error(), lastTail(err))
+		postFailure(ctx, deps, in, "setup: "+err.Error(), lastTail(err))
 		return ImplementResult{}, err
 	}
 
 	if err := implementLoop(ctx, deps, in, layout, cfg); err != nil {
-		postFailure(ctx, deps.GH, in, "implement: "+err.Error(), lastTail(err))
+		postFailure(ctx, deps, in, "implement: "+err.Error(), lastTail(err))
 		return ImplementResult{}, err
 	}
 
 	body := generatePRBody(ctx, deps.Claude, in, layout)
-	title := generatePRTitle(ctx, deps.Claude, in, layout)
+	title := generatePRTitle(ctx, deps.Claude, in, layout, validate)
 
 	if err := deps.Git.Push(ctx, layout.WorktreePath, defaultRemote, layout.BranchName); err != nil {
-		postFailure(ctx, deps.GH, in, "push: "+err.Error(), "")
+		postFailure(ctx, deps, in, "push: "+err.Error(), "")
 		return ImplementResult{}, err
 	}
 
 	pr, err := deps.GH.CreatePR(ctx, layout.WorktreePath, CreatePROpts{
 		Title:   title,
-		Body:    body + "\n\nCloses #" + in.TaskRef.ID,
+		Body:    appendCloses(body, in.TaskRef.ID),
 		BaseRef: defaultBaseBranch,
 		HeadRef: layout.BranchName,
 		Labels:  []string{"agent:authored"},
 	})
 	if err != nil {
-		postFailure(ctx, deps.GH, in, "pr create: "+err.Error(), "")
+		postFailure(ctx, deps, in, "pr create: "+err.Error(), "")
 		return ImplementResult{}, err
 	}
 
+	succeeded = true
 	return ImplementResult{PR: pr}, nil
 }
 
+// closesRefRE matches GitHub's issue-closing keywords (close|closes|closed|
+// fix|fixes|fixed|resolve|resolves|resolved) followed by a #<id> reference.
+// Case-insensitive. Used to detect whether the LLM-generated body already
+// closes the issue we'd otherwise append for.
+var closesRefRE = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b`)
+
+func appendCloses(body, issueID string) string {
+	for _, m := range closesRefRE.FindAllStringSubmatch(body, -1) {
+		if len(m) >= 3 && m[2] == issueID {
+			return body
+		}
+	}
+	return body + "\n\nCloses #" + issueID
+}
+
 func boardSetup(ctx context.Context, git GitRunner, repoPath string, layout WorktreeLayout) error {
+	// Always prune first — git can hold a stale worktree entry pointing at a
+	// directory that was removed externally; without prune the subsequent
+	// `worktree add` will fail with "already registered".
+	if err := git.Prune(ctx, repoPath); err != nil {
+		return fmt.Errorf("worktree prune: %w", err)
+	}
 	if _, err := os.Stat(layout.WorktreePath); err == nil {
-		_ = git.WorktreeRemove(ctx, repoPath, layout.WorktreePath)
+		if err := git.WorktreeRemove(ctx, repoPath, layout.WorktreePath); err != nil {
+			// Remove may fail if the directory exists but isn't registered as a
+			// worktree (e.g. a previous run partially failed). Fall back to a
+			// plain filesystem remove so the subsequent add can succeed.
+			if rmErr := os.RemoveAll(layout.WorktreePath); rmErr != nil {
+				return fmt.Errorf("remove stale worktree: %w (git remove: %v)", rmErr, err)
+			}
+		}
 	}
 	if err := git.Fetch(ctx, repoPath, defaultRemote, defaultBaseRef); err != nil {
 		return fmt.Errorf("fetch: %w", err)
@@ -235,7 +287,9 @@ func generatePRBody(ctx context.Context, claude ClaudeRunner, in ImplementInput,
 	return stripCodeFence(strings.TrimSpace(out))
 }
 
-// stripCodeFence removes a single outer ```lang ... ``` fence if one wraps the entire string.
+// stripCodeFence removes a single outer ```lang ... ``` fence if one wraps
+// the entire string. It does not parse inner fences (a code example inside
+// the body is left untouched).
 func stripCodeFence(s string) string {
 	if !strings.HasPrefix(s, "```") {
 		return s
@@ -253,12 +307,12 @@ func stripCodeFence(s string) string {
 	return strings.TrimRight(inner[:len(inner)-3], "\n")
 }
 
-func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
+func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout, validate TitleValidator) string {
 	// Prefer the issue title verbatim if the maintainer already wrote a valid
 	// Conventional Commits title — no point asking claude to re-derive what's
 	// already correct, and it avoids a double-prefix like "chore: docs(...)".
-	if final, replaced := ConformOrFallback(in.Title, in.Title); !replaced {
-		return final
+	if validate(ctx, in.RepoPath, in.Title) == nil {
+		return in.Title
 	}
 	prompt := "Generate a single Conventional Commits PR title for the commits on the current branch " +
 		"(compared to origin/main). The PR implements GitHub issue #" + in.TaskRef.ID + ": \"" + in.Title + "\".\n\n" +
@@ -269,22 +323,24 @@ func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput
 		"Output ONLY the title text, a single line, with no preamble or commentary."
 	out, err := claude.Run(ctx, layout.WorktreePath, prompt)
 	generated := strings.TrimSpace(out)
-	if err == nil && generated != "" {
-		if final, replaced := ConformOrFallback(generated, in.Title); !replaced {
-			return final
-		}
+	if err == nil && generated != "" && validate(ctx, in.RepoPath, generated) == nil {
+		return generated
 	}
-	// Both the issue title and the generated title were invalid.
-	final, _ := ConformOrFallback(in.Title, in.Title)
-	return final
+	// Both the issue title and the generated title were invalid; the issue
+	// title was already validated above, so go straight to the fallback.
+	return "chore: " + in.Title
 }
 
-func postFailure(ctx context.Context, gh GitHubClient, in ImplementInput, msg, tail string) {
+func postFailure(ctx context.Context, deps Deps, in ImplementInput, msg, tail string) {
 	body := "Agent loop failed: " + msg
 	if tail != "" {
 		body += "\n\n```\n" + tail + "\n```"
 	}
-	_ = gh.CommentIssue(ctx, in.RepoPath, in.TaskRef.ID, body)
+	if err := deps.GH.CommentIssue(ctx, in.RepoPath, in.TaskRef.ID, body); err != nil && deps.Stderr != nil {
+		// Failure to post the comment is itself a real signal worth surfacing
+		// — the operator otherwise sees only the label without explanation.
+		_, _ = fmt.Fprintf(deps.Stderr, "postFailure: comment failed for issue #%s: %v\n", in.TaskRef.ID, err)
+	}
 }
 
 type tailErrWrap struct {

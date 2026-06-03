@@ -62,10 +62,15 @@ type fakeGit struct {
 	added   bool
 	removed bool
 	fetched bool
+	pruned  bool
 }
 
 func (f *fakeGit) Fetch(_ context.Context, _, _, _ string) error {
 	f.fetched = true
+	return nil
+}
+func (f *fakeGit) Prune(_ context.Context, _ string) error {
+	f.pruned = true
 	return nil
 }
 func (f *fakeGit) WorktreeAdd(_ context.Context, _, _, _, _ string) error {
@@ -93,6 +98,7 @@ type fakeGitErr struct {
 }
 
 func (f *fakeGitErr) Fetch(_ context.Context, _, _, _ string) error { return f.fetchErr }
+func (f *fakeGitErr) Prune(_ context.Context, _ string) error       { return nil }
 func (f *fakeGitErr) WorktreeAdd(_ context.Context, _, _, _, _ string) error {
 	return f.addErr
 }
@@ -129,8 +135,26 @@ func (f *fakeGHCapture) CommentIssue(_ context.Context, _, _ string, _ string) e
 
 var testRunID = func() string { return "test" }
 
+// stubValidate accepts every title — keeps the happy-path tests independent
+// of the host's `go tool conform` and removes the only source of slowness in
+// the test suite.
+var stubValidate engineer.TitleValidator = func(_ context.Context, _, _ string) error { return nil }
+
+// rejectValidate refuses every title — drives the fallback paths in title
+// generation tests.
+var rejectValidate engineer.TitleValidator = func(_ context.Context, _, _ string) error {
+	return errors.New("invalid title")
+}
+
 func newDeps(claude *fakeClaude, sh *fakeShell, git *fakeGit, gh *fakeGH) engineer.Deps {
-	return engineer.Deps{Claude: claude, Shell: sh, Git: git, GH: gh, NewRunID: testRunID}
+	return engineer.Deps{
+		Claude:        claude,
+		Shell:         sh,
+		Git:           git,
+		GH:            gh,
+		NewRunID:      testRunID,
+		ValidateTitle: stubValidate,
+	}
 }
 
 func writeBrigadeYAML(t *testing.T, dir string) {
@@ -160,7 +184,8 @@ func TestRunImplement_HappyPath(t *testing.T) {
 	}}
 	sh := &fakeShell{}
 	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 2}}
-	gh := &fakeGH{pr: engineer.PRInfo{URL: "https://example.com/pr/456", Number: 456}}
+	var captured engineer.CreatePROpts
+	gh := &fakeGHCapture{pr: engineer.PRInfo{URL: "https://example.com/pr/456", Number: 456}, capture: &captured}
 
 	in := engineer.ImplementInput{
 		TaskRef:       engineer.TaskRef{Source: "github", ID: "123"},
@@ -169,15 +194,22 @@ func TestRunImplement_HappyPath(t *testing.T) {
 		Specification: "## Agent Brief\n...",
 		RepoPath:      repoDir,
 	}
-	res, err := engineer.RunImplement(t.Context(), in, newDeps(claude, sh, git, gh))
+	res, err := engineer.RunImplement(t.Context(), in, engineer.Deps{
+		Claude: claude, Shell: sh, Git: git, GH: gh,
+		NewRunID: testRunID, ValidateTitle: stubValidate,
+	})
 	require.NoError(t, err)
 	assert.Equal(t, 456, res.PR.Number)
 	assert.Equal(t, "https://example.com/pr/456", res.PR.URL)
 	assert.True(t, git.fetched, "expected fetch")
+	assert.True(t, git.pruned, "expected worktree prune")
 	assert.True(t, git.added, "expected worktree add")
 	assert.True(t, git.pushed, "expected push")
-	assert.Len(t, claude.calls, 3, "expected implement + body + title claude calls")
-	assert.Empty(t, gh.comments, "no failure comment on happy path")
+	assert.True(t, git.removed, "expected worktree cleanup on success")
+	assert.Len(t, claude.calls, 2, "expected implement + body claude calls (title validates without claude)")
+	assert.Equal(t, "Fix things", captured.Title, "issue title is already valid Conventional Commits")
+	assert.Equal(t, "PR body content\n\nCloses #123", captured.Body)
+	assert.Equal(t, []string{"agent:authored"}, captured.Labels)
 }
 
 func TestRunImplement_RetryThenPass(t *testing.T) {
@@ -300,7 +332,7 @@ func TestRunImplement_FetchFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "300"},
 		RepoPath: repoDir,
-	}, engineer.Deps{Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: git, GH: gh, NewRunID: testRunID})
+	}, engineer.Deps{Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: git, GH: gh, NewRunID: testRunID, ValidateTitle: stubValidate})
 	require.Error(t, err)
 	require.Len(t, gh.comments, 1)
 	assert.Contains(t, gh.comments[0], "board setup")
@@ -316,7 +348,7 @@ func TestRunImplement_ConfigMissing(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "301"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -338,7 +370,7 @@ func TestRunImplement_SetupCommandFails(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "302"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: &fakeClaude{}, Shell: sh, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -359,7 +391,7 @@ func TestRunImplement_ZeroCommits(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "303"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -379,7 +411,7 @@ func TestRunImplement_ClaudeCrashFatal(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "304"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -405,7 +437,7 @@ func TestRunImplement_PushFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "305"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -428,7 +460,7 @@ func TestRunImplement_PRCreateFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "306"},
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -445,8 +477,7 @@ func TestRunImplement_PRBodyFallback(t *testing.T) {
 
 	claude := &fakeClaude{outputs: []claudeOutput{
 		{Output: "impl ok"},
-		{Output: "", Err: errExitNonZero},
-		{Output: "feat: x"},
+		{Output: "", Err: errExitNonZero}, // body generation fails → fallback
 	}}
 	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 1}}
 	var captured engineer.CreatePROpts
@@ -455,11 +486,12 @@ func TestRunImplement_PRBodyFallback(t *testing.T) {
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "400"},
 		Title:    "T",
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: stubValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.NoError(t, err)
-	assert.Contains(t, captured.Body, "Implements #400")
+	// Exact match — proves the fallback shape, not just substring presence.
+	assert.Equal(t, "Implements #400.\n\nCloses #400", captured.Body)
 }
 
 func TestRunImplement_PRTitleFallback(t *testing.T) {
@@ -472,7 +504,7 @@ func TestRunImplement_PRTitleFallback(t *testing.T) {
 	claude := &fakeClaude{outputs: []claudeOutput{
 		{Output: "impl"},
 		{Output: "body"},
-		{Output: "", Err: errExitNonZero},
+		{Output: "", Err: errExitNonZero}, // claude title-gen call also fails
 	}}
 	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 1}}
 	var captured engineer.CreatePROpts
@@ -481,7 +513,7 @@ func TestRunImplement_PRTitleFallback(t *testing.T) {
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "401"},
 		Title:    "Original title",
 		RepoPath: repoDir,
-	}, engineer.Deps{NewRunID: testRunID,
+	}, engineer.Deps{NewRunID: testRunID, ValidateTitle: rejectValidate,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.NoError(t, err)

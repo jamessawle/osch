@@ -7,12 +7,15 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 // GitRunner is the interface that the engineer uses to drive git
 // operations. The production impl shells out to `git`.
 type GitRunner interface {
 	Fetch(ctx context.Context, repoPath, remote, branch string) error
+	Prune(ctx context.Context, repoPath string) error
 	WorktreeAdd(ctx context.Context, repoPath, worktreePath, branch, baseRef string) error
 	WorktreeRemove(ctx context.Context, repoPath, worktreePath string) error
 	Push(ctx context.Context, worktreePath, remote, branch string) error
@@ -38,25 +41,13 @@ func DeriveWorktreeLayout(repoPath, taskID, nonce string) WorktreeLayout {
 	}
 }
 
-// ConformOrFallback runs `go tool conform` against the given title (conform
-// is a module tool dep in this repo, not a PATH binary). If conform accepts
-// the title it is returned unchanged; otherwise the function returns
-// ("chore: <taskTitle>", true).
-func ConformOrFallback(generated, taskTitle string) (string, bool) {
-	if err := runConform(generated); err == nil {
-		return generated, false
+// defaultTitleValidator runs `go tool conform` from repoPath. conform is a
+// module tool dep in this repo, not a PATH binary; the test suite injects
+// fakes via Deps.ValidateTitle so this never runs in unit tests.
+func defaultTitleValidator(ctx context.Context, repoPath, title string) error {
+	if repoPath == "" {
+		return fmt.Errorf("repo path required")
 	}
-	return "chore: " + taskTitle, true
-}
-
-func runConform(title string) error {
-	// conform reads .conform.yaml from cwd, so run from the repo root.
-	rootBytes, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return fmt.Errorf("find repo root: %w", err)
-	}
-	repoRoot := string(bytes.TrimSpace(rootBytes))
-
 	f, err := os.CreateTemp("", "brigade-conform-*.txt")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
@@ -70,8 +61,8 @@ func runConform(title string) error {
 		return fmt.Errorf("close temp file: %w", err)
 	}
 
-	cmd := exec.Command("go", "tool", "conform", "enforce", "--commit-msg-file", f.Name())
-	cmd.Dir = repoRoot
+	cmd := exec.CommandContext(ctx, "go", "tool", "conform", "enforce", "--commit-msg-file", f.Name())
+	cmd.Dir = repoPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("conform rejected title: %s: %w", string(out), err)
 	}
@@ -80,18 +71,29 @@ func runConform(title string) error {
 
 type realGit struct{ stderr io.Writer }
 
+// gitOut runs git with separated stdout/stderr. stdout is returned for
+// parsing; stderr is forwarded to the engineer's log writer and only used
+// for error context if the command fails.
 func (r realGit) gitOut(ctx context.Context, workdir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = io.MultiWriter(&buf, r.stderr)
-	err := cmd.Run()
-	return buf.String(), err
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	errTail := newTailBuffer()
+	cmd.Stderr = io.MultiWriter(errTail, r.stderr)
+	if err := cmd.Run(); err != nil {
+		return stdout.String(), fmt.Errorf("%w: %s", err, errTail.String())
+	}
+	return stdout.String(), nil
 }
 
 func (r realGit) Fetch(ctx context.Context, repoPath, remote, branch string) error {
 	_, err := r.gitOut(ctx, repoPath, "fetch", remote, branch)
+	return err
+}
+
+func (r realGit) Prune(ctx context.Context, repoPath string) error {
+	_, err := r.gitOut(ctx, repoPath, "worktree", "prune")
 	return err
 }
 
@@ -115,11 +117,9 @@ func (r realGit) CommitCount(ctx context.Context, worktreePath, baseRef string) 
 	if err != nil {
 		return 0, err
 	}
-	n := 0
-	for _, b := range []byte(out) {
-		if b >= '0' && b <= '9' {
-			n = n*10 + int(b-'0')
-		}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, fmt.Errorf("parse commit count %q: %w", out, err)
 	}
 	return n, nil
 }

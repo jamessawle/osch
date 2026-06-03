@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -35,11 +36,17 @@ func LoadConfig(worktreePath string) (Config, error) {
 		return Config{}, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	// First parse as generic YAML to validate structure
+	// First parse as generic YAML to validate structure. An empty file is
+	// treated as a no-op config (no setup, no checks); the yaml decoder
+	// signals empty input with io.EOF, which is otherwise indistinguishable
+	// from "malformed" if propagated.
 	var rawCfg map[string]interface{}
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
 	dec.KnownFields(true)
 	if err := dec.Decode(&rawCfg); err != nil {
+		if errors.Is(err, io.EOF) {
+			return Config{Setup: []string{}, Checks: []string{}}, nil
+		}
 		return Config{}, fmt.Errorf("%w: %v", ErrConfigMalformed, err)
 	}
 

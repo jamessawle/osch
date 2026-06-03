@@ -1,7 +1,6 @@
 package engineer
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -28,21 +27,28 @@ type ClaudeRunner interface {
 type realClaude struct{ stderr io.Writer }
 
 func (r realClaude) Run(ctx context.Context, workdir, prompt string) (string, error) {
-	settingsPath := filepath.Join(workdir, ".brigade-settings.json")
+	// Sandbox settings live outside the worktree so the agent can't see, edit,
+	// or accidentally commit them; a fresh tempdir per call also avoids any
+	// leftover-symlink trust inversion if a previous run crashed.
+	settingsDir, err := os.MkdirTemp("", "brigade-settings-*")
+	if err != nil {
+		return "", fmt.Errorf("settings tempdir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(settingsDir) }()
+	settingsPath := filepath.Join(settingsDir, ".brigade-settings.json")
 	if err := os.WriteFile(settingsPath, embeddedSettings, 0o600); err != nil {
 		return "", fmt.Errorf("write settings: %w", err)
 	}
-	defer func() { _ = os.Remove(settingsPath) }()
 
 	cmd := exec.CommandContext(ctx, "claude",
 		"-p", prompt,
-		"--permission-mode", "acceptEdits",
+		"--permission-mode", "dontAsk",
 		"--settings", settingsPath,
 	)
 	cmd.Dir = workdir
-	var stdoutBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = io.MultiWriter(&stdoutBuf, r.stderr)
-	err := cmd.Run()
-	return stdoutBuf.String(), err
+	out := newTailBuffer()
+	cmd.Stdout = out
+	cmd.Stderr = io.MultiWriter(out, r.stderr)
+	runErr := cmd.Run()
+	return out.String(), runErr
 }

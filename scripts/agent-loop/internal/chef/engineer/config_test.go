@@ -31,6 +31,16 @@ checks:
 	assert.Equal(t, []string{"go build ./...", "go test ./..."}, cfg.Checks)
 }
 
+func TestLoadConfig_EmptyFileIsValid(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, dir, ".brigade.yml", "")
+	cfg, err := engineer.LoadConfig(dir)
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Setup)
+	assert.Empty(t, cfg.Checks)
+}
+
 func TestLoadConfig_MissingFile(t *testing.T) {
 	t.Parallel()
 	_, err := engineer.LoadConfig(t.TempDir())

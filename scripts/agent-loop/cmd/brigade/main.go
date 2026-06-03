@@ -18,22 +18,24 @@ type CLI struct {
 
 func main() {
 	var cli CLI
-	parser := kong.Must(&cli, kong.Name("brigade"), kong.UsageOnError())
+	parser := kong.Must(&cli,
+		kong.Name("brigade"),
+		kong.UsageOnError(),
+		// Kong resolves interface parameters on Run methods by type. context.Context
+		// is an interface, so it has to be registered via BindTo; the concrete IO
+		// struct binds by value.
+		kong.BindTo(context.Background(), (*context.Context)(nil)),
+	)
 	kctx, err := parser.Parse(os.Args[1:])
-	if err != nil {
-		parser.FatalIfErrorf(err)
+	parser.FatalIfErrorf(err)
+
+	ios := chefcmd.IO{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
-	switch kctx.Command() {
-	case "chef <name>":
-		if err := cli.Chef.Run(context.Background(), chefcmd.IO{
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		}); err != nil {
-			_, _ = os.Stderr.WriteString("brigade: " + err.Error() + "\n")
-			os.Exit(1)
-		}
-	default:
-		parser.FatalIfErrorf(kctx.Error)
+	if err := kctx.Run(ios); err != nil {
+		_, _ = os.Stderr.WriteString("brigade: " + err.Error() + "\n")
+		os.Exit(1)
 	}
 }

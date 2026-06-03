@@ -3,9 +3,7 @@ package engineer
 import (
 	"context"
 	"io"
-	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/oklog/ulid/v2"
 
@@ -13,12 +11,10 @@ import (
 )
 
 // defaultRunID returns a lowercase ULID for use as the per-run branch nonce.
-// Each call uses a fresh entropy source seeded from the current time, which
-// is sufficient for the engineer's single-process, sequential use.
+// ulid.Make uses a crypto/rand-backed monotonic entropy source, so concurrent
+// callers in the same millisecond cannot collide.
 func defaultRunID() string {
-	t := time.Now().UTC()
-	entropy := rand.New(rand.NewSource(t.UnixNano()))
-	return strings.ToLower(ulid.MustNew(ulid.Timestamp(t), entropy).String())
+	return strings.ToLower(ulid.Make().String())
 }
 
 // Run is the engineer Chef entry point. It dispatches on chit.Kind and
@@ -70,5 +66,6 @@ func ProductionDeps(stderr io.Writer) Deps {
 		Shell:  realShell{stderr: stderr},
 		Git:    realGit{stderr: stderr},
 		GH:     realGH{stderr: stderr},
+		Stderr: stderr,
 	}
 }

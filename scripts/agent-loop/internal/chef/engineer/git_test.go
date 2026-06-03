@@ -13,19 +13,3 @@ func TestDeriveWorktreeLayout(t *testing.T) {
 	assert.Equal(t, "/home/user/code/osch-agent-issue-123", got.WorktreePath)
 	assert.Equal(t, "agent/issue-123-01jx", got.BranchName)
 }
-
-func TestConformFallbackTitle(t *testing.T) {
-	t.Parallel()
-	t.Run("good title returned unchanged", func(t *testing.T) {
-		t.Parallel()
-		out, replaced := engineer.ConformOrFallback("feat: add thing", "Original task title")
-		assert.Equal(t, "feat: add thing", out)
-		assert.False(t, replaced)
-	})
-	t.Run("bad title falls back to chore", func(t *testing.T) {
-		t.Parallel()
-		out, replaced := engineer.ConformOrFallback("just some text", "Original task title")
-		assert.Equal(t, "chore: Original task title", out)
-		assert.True(t, replaced)
-	})
-}

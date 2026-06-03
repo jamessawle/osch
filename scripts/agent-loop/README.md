@@ -150,9 +150,10 @@ split:
   Chef's `claude -p` runs. This file is **embedded into the brigade binary**
   at compile time (via `go:embed`) from
   `scripts/agent-loop/internal/chef/engineer/settings.json`. On each `claude -p`
-  invocation the engineer writes it to a temporary `.brigade-settings.json`
-  inside the worktree, passes `--settings .brigade-settings.json` to claude,
-  and removes the file when the call returns.
+  invocation the engineer writes it to a `.brigade-settings.json` file inside
+  a per-call `os.MkdirTemp` directory (outside the worktree so the agent
+  can't read, edit, or accidentally commit it), passes `--settings <abs path>`
+  to claude, and removes the tempdir when the call returns.
 
 ### Why two files
 
