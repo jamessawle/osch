@@ -61,12 +61,12 @@ If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installe
 ### Update an installed schema
 
 ```
-osch update <schema>
+osch update <schema> [--force]
 ```
 
 Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "already up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit.
 
-Before any network call, `osch update` checks the local schema against the per-file SHA-256 hashes in `.osch.json`. If any tracked file's content has changed, a tracked file is missing, or an extra untracked file is present (excluding `.osch.json` and the local-only `.osch/` directory), the command aborts with a non-zero exit and an error that lists every offending path. No files are written, deleted, or otherwise touched on refusal. The check is fully offline — a refusal makes zero upstream calls. A `--force` override lands in a follow-up.
+Before any network call, `osch update` checks the local schema against the per-file SHA-256 hashes in `.osch.json`. If any tracked file's content has changed, a tracked file is missing, or an extra untracked file is present (excluding `.osch.json` and the local-only `.osch/` directory), the command aborts with a non-zero exit and an error that lists every offending path. No files are written, deleted, or otherwise touched on refusal. The check is fully offline — a refusal makes zero upstream calls. Pass `--force` to skip the refusal and proceed with the update; the always-on snapshot still captures the pre-update state (including any edits and extra untracked files) so you can recover from `openspec/schemas/<schema>/.osch/<timestamp>/`. `--force` only disables this one check — every other error path (upstream-resolve, snapshot-write, fetch, write/prune, manifest read/write) still aborts the command.
 
 Before any file write or delete during an update, `osch` copies the entire schema folder (excluding `.osch/` itself) into `openspec/schemas/<schema>/.osch/<UTC-ISO-datetime>/` (e.g. `20260603T143012Z`) so the pre-update state is recoverable. The snapshot path is printed on success. A `.osch/.gitignore` containing `*` is written alongside, so git ignores the snapshot folder — including the `.gitignore` itself. Snapshots are local-only and never created when the update is a no-op; they are never rotated or cleaned up automatically. If the snapshot cannot be written the update aborts before any schema file is overwritten.
 

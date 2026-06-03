@@ -7,14 +7,20 @@ import (
 )
 
 func newUpdateCmd() *cobra.Command {
-	return &cobra.Command{
+	c := &cobra.Command{
 		Use:   "update <schema>",
 		Short: "Refresh an installed schema to the upstream default branch HEAD",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return update.Update(cmd.Context(), updateClientFor, ".", args[0], cmd.OutOrStdout())
+			force, err := cmd.Flags().GetBool("force")
+			if err != nil {
+				return err
+			}
+			return update.Update(cmd.Context(), updateClientFor, ".", args[0], force, cmd.OutOrStdout())
 		},
 	}
+	c.Flags().Bool("force", false, "overwrite locally modified files")
+	return c
 }
 
 // updateClientFor wraps the package-level clientFactory so update.Update can
