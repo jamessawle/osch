@@ -1,0 +1,15 @@
+scripts/agent-loop/internal/chef/engineer/shell.go
+  ai_agent 1-10
+scripts/agent-loop/internal/chef/engineer/git.go
+  ai_agent 1-53
+scripts/agent-loop/internal/chef/engineer/github.go
+  ai_agent 1-24
+scripts/agent-loop/internal/chef/engineer/git_test.go
+  ai_agent 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "293be3c9eb8393ad47f28f7e46159e20324b06ae",
+  "prompts": {}
+}
