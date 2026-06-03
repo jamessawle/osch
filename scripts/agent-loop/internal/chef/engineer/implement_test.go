@@ -127,8 +127,10 @@ func (f *fakeGHCapture) CreatePR(_ context.Context, _ string, opts engineer.Crea
 }
 func (f *fakeGHCapture) CommentIssue(_ context.Context, _, _ string, _ string) error { return nil }
 
+var testRunID = func() string { return "test" }
+
 func newDeps(claude *fakeClaude, sh *fakeShell, git *fakeGit, gh *fakeGH) engineer.Deps {
-	return engineer.Deps{Claude: claude, Shell: sh, Git: git, GH: gh}
+	return engineer.Deps{Claude: claude, Shell: sh, Git: git, GH: gh, NewRunID: testRunID}
 }
 
 func writeBrigadeYAML(t *testing.T, dir string) {
@@ -147,7 +149,7 @@ checks:
 func TestRunImplement_HappyPath(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "123")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "123", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -181,7 +183,7 @@ func TestRunImplement_HappyPath(t *testing.T) {
 func TestRunImplement_RetryThenPass(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "200")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "200", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -220,7 +222,7 @@ func TestRunImplement_RetryThenPass(t *testing.T) {
 func TestRunImplement_ExhaustedRetries(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "201")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "201", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -251,7 +253,7 @@ func TestRunImplement_ExhaustedRetries(t *testing.T) {
 func TestRunImplement_MultipleFailuresAllFedBack(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "202")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "202", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -298,7 +300,7 @@ func TestRunImplement_FetchFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "300"},
 		RepoPath: repoDir,
-	}, engineer.Deps{Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: git, GH: gh})
+	}, engineer.Deps{Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: git, GH: gh, NewRunID: testRunID})
 	require.Error(t, err)
 	require.Len(t, gh.comments, 1)
 	assert.Contains(t, gh.comments[0], "board setup")
@@ -307,14 +309,14 @@ func TestRunImplement_FetchFailure(t *testing.T) {
 func TestRunImplement_ConfigMissing(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "301")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "301", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 
 	gh := &fakeGH{}
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "301"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -325,7 +327,7 @@ func TestRunImplement_ConfigMissing(t *testing.T) {
 func TestRunImplement_SetupCommandFails(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "302")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "302", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -336,7 +338,7 @@ func TestRunImplement_SetupCommandFails(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "302"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: &fakeClaude{}, Shell: sh, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -347,7 +349,7 @@ func TestRunImplement_SetupCommandFails(t *testing.T) {
 func TestRunImplement_ZeroCommits(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "303")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "303", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -357,7 +359,7 @@ func TestRunImplement_ZeroCommits(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "303"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -368,7 +370,7 @@ func TestRunImplement_ZeroCommits(t *testing.T) {
 func TestRunImplement_ClaudeCrashFatal(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "304")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "304", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -377,7 +379,7 @@ func TestRunImplement_ClaudeCrashFatal(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "304"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
 	})
 	require.Error(t, err)
@@ -388,7 +390,7 @@ func TestRunImplement_ClaudeCrashFatal(t *testing.T) {
 func TestRunImplement_PushFailure(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "305")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "305", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -403,7 +405,7 @@ func TestRunImplement_PushFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "305"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -414,7 +416,7 @@ func TestRunImplement_PushFailure(t *testing.T) {
 func TestRunImplement_PRCreateFailure(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "306")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "306", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -426,7 +428,7 @@ func TestRunImplement_PRCreateFailure(t *testing.T) {
 	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "306"},
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.Error(t, err)
@@ -437,7 +439,7 @@ func TestRunImplement_PRCreateFailure(t *testing.T) {
 func TestRunImplement_PRBodyFallback(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "400")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "400", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -453,7 +455,7 @@ func TestRunImplement_PRBodyFallback(t *testing.T) {
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "400"},
 		Title:    "T",
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.NoError(t, err)
@@ -463,7 +465,7 @@ func TestRunImplement_PRBodyFallback(t *testing.T) {
 func TestRunImplement_PRTitleFallback(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "401")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "401", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
@@ -479,7 +481,7 @@ func TestRunImplement_PRTitleFallback(t *testing.T) {
 		TaskRef:  engineer.TaskRef{Source: "github", ID: "401"},
 		Title:    "Original title",
 		RepoPath: repoDir,
-	}, engineer.Deps{
+	}, engineer.Deps{NewRunID: testRunID,
 		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
 	})
 	require.NoError(t, err)

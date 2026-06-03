@@ -10,6 +10,7 @@ tool (
 
 require (
 	github.com/alecthomas/kong v1.15.0
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/term v0.38.0

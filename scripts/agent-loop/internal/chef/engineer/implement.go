@@ -37,12 +37,15 @@ type ImplementResult struct {
 }
 
 // Deps bundles the external collaborators. Production wires real impls;
-// tests inject fakes.
+// tests inject fakes. NewRunID returns a per-run nonce used to stamp the
+// agent branch name so successive attempts against the same issue never
+// collide on a stale remote ref. If nil, a default ULID generator is used.
 type Deps struct {
-	Claude ClaudeRunner
-	Shell  ShellRunner
-	Git    GitRunner
-	GH     GitHubClient
+	Claude   ClaudeRunner
+	Shell    ShellRunner
+	Git      GitRunner
+	GH       GitHubClient
+	NewRunID func() string
 }
 
 // RunImplement executes the implement Chit end-to-end. Returns a result
@@ -53,7 +56,11 @@ func RunImplement(ctx context.Context, in ImplementInput, deps Deps) (ImplementR
 		return ImplementResult{}, fmt.Errorf("unsupported task ref source %q", in.TaskRef.Source)
 	}
 
-	layout := DeriveWorktreeLayout(in.RepoPath, in.TaskRef.ID)
+	newRunID := deps.NewRunID
+	if newRunID == nil {
+		newRunID = defaultRunID
+	}
+	layout := DeriveWorktreeLayout(in.RepoPath, in.TaskRef.ID, newRunID())
 
 	if err := boardSetup(ctx, deps.Git, in.RepoPath, layout); err != nil {
 		postFailure(ctx, deps.GH, in, "board setup: "+err.Error(), "")

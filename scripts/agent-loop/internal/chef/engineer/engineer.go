@@ -3,9 +3,23 @@ package engineer
 import (
 	"context"
 	"io"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/oklog/ulid/v2"
 
 	"github.com/jamessawle/osch/scripts/agent-loop/internal/chef"
 )
+
+// defaultRunID returns a lowercase ULID for use as the per-run branch nonce.
+// Each call uses a fresh entropy source seeded from the current time, which
+// is sufficient for the engineer's single-process, sequential use.
+func defaultRunID() string {
+	t := time.Now().UTC()
+	entropy := rand.New(rand.NewSource(t.UnixNano()))
+	return strings.ToLower(ulid.MustNew(ulid.Timestamp(t), entropy).String())
+}
 
 // Run is the engineer Chef entry point. It dispatches on chit.Kind and
 // returns a Proof reflecting the outcome. A non-nil error returned from

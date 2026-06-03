@@ -27,11 +27,14 @@ type WorktreeLayout struct {
 }
 
 // DeriveWorktreeLayout picks a sibling-directory worktree path and
-// branch name from the source repo path and task ID.
-func DeriveWorktreeLayout(repoPath, taskID string) WorktreeLayout {
+// branch name from the source repo path, task ID, and a per-run nonce.
+// The path stays deterministic (so local cleanup is straightforward); the
+// branch carries the nonce so successive attempts against the same issue
+// never collide on a stale remote ref.
+func DeriveWorktreeLayout(repoPath, taskID, nonce string) WorktreeLayout {
 	return WorktreeLayout{
 		WorktreePath: repoPath + "-agent-issue-" + taskID,
-		BranchName:   "agent/issue-" + taskID,
+		BranchName:   "agent/issue-" + taskID + "-" + nonce,
 	}
 }
 

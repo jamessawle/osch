@@ -21,15 +21,16 @@ func TestRun_UnknownKindReturnsFailedProof(t *testing.T) {
 func TestRun_ImplementKindCallsRunImplement(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
-	layout := engineer.DeriveWorktreeLayout(repoDir, "500")
+	layout := engineer.DeriveWorktreeLayout(repoDir, "500", "test")
 	require.NoError(t, mkdirAll(layout.WorktreePath))
 	writeBrigadeYAML(t, layout.WorktreePath)
 
 	deps := engineer.Deps{
-		Claude: &fakeClaude{outputs: []claudeOutput{{Output: "i"}, {Output: "b"}, {Output: "feat: x"}}},
-		Shell:  &fakeShell{},
-		Git:    &fakeGit{commits: map[string]int{layout.WorktreePath: 1}},
-		GH:     &fakeGH{pr: engineer.PRInfo{URL: "u", Number: 7}},
+		Claude:   &fakeClaude{outputs: []claudeOutput{{Output: "i"}, {Output: "b"}, {Output: "feat: x"}}},
+		Shell:    &fakeShell{},
+		Git:      &fakeGit{commits: map[string]int{layout.WorktreePath: 1}},
+		GH:       &fakeGH{pr: engineer.PRInfo{URL: "u", Number: 7}},
+		NewRunID: testRunID,
 	}
 	c := chef.Chit{
 		Kind: "implement",
