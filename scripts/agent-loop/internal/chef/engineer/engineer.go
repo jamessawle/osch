@@ -2,7 +2,6 @@ package engineer
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/jamessawle/osch/scripts/agent-loop/internal/chef"
@@ -58,37 +57,4 @@ func ProductionDeps(stderr io.Writer) Deps {
 		Git:    realGit{stderr: stderr},
 		GH:     realGH{stderr: stderr},
 	}
-}
-
-type realClaude struct{ stderr io.Writer }
-type realShell struct{ stderr io.Writer }
-type realGit struct{ stderr io.Writer }
-type realGH struct{ stderr io.Writer }
-
-func (r realClaude) Run(_ context.Context, _, _ string) (string, error) {
-	return "", errors.New("realClaude not implemented yet")
-}
-func (r realShell) Run(_ context.Context, _, _ string) (string, error) {
-	return "", errors.New("realShell not implemented yet")
-}
-func (r realGit) Fetch(_ context.Context, _, _, _ string) error {
-	return errors.New("realGit not implemented yet")
-}
-func (r realGit) WorktreeAdd(_ context.Context, _, _, _, _ string) error {
-	return errors.New("realGit not implemented yet")
-}
-func (r realGit) WorktreeRemove(_ context.Context, _, _ string) error {
-	return errors.New("realGit not implemented yet")
-}
-func (r realGit) Push(_ context.Context, _, _, _ string) error {
-	return errors.New("realGit not implemented yet")
-}
-func (r realGit) CommitCount(_ context.Context, _, _ string) (int, error) {
-	return 0, errors.New("realGit not implemented yet")
-}
-func (r realGH) CreatePR(_ context.Context, _ string, _ CreatePROpts) (PRInfo, error) {
-	return PRInfo{}, errors.New("realGH not implemented yet")
-}
-func (r realGH) CommentIssue(_ context.Context, _, _, _ string) error {
-	return errors.New("realGH not implemented yet")
 }

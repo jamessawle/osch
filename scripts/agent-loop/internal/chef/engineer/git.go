@@ -1,8 +1,10 @@
 package engineer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -50,4 +52,50 @@ func runConform(title string) error {
 		return fmt.Errorf("conform rejected title: %s: %w", string(out), err)
 	}
 	return nil
+}
+
+type realGit struct{ stderr io.Writer }
+
+func (r realGit) gitOut(ctx context.Context, workdir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = workdir
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = io.MultiWriter(&buf, r.stderr)
+	err := cmd.Run()
+	return buf.String(), err
+}
+
+func (r realGit) Fetch(ctx context.Context, repoPath, remote, branch string) error {
+	_, err := r.gitOut(ctx, repoPath, "fetch", remote, branch)
+	return err
+}
+
+func (r realGit) WorktreeAdd(ctx context.Context, repoPath, worktreePath, branch, baseRef string) error {
+	_, err := r.gitOut(ctx, repoPath, "worktree", "add", "-b", branch, worktreePath, baseRef)
+	return err
+}
+
+func (r realGit) WorktreeRemove(ctx context.Context, repoPath, worktreePath string) error {
+	_, err := r.gitOut(ctx, repoPath, "worktree", "remove", "--force", worktreePath)
+	return err
+}
+
+func (r realGit) Push(ctx context.Context, worktreePath, remote, branch string) error {
+	_, err := r.gitOut(ctx, worktreePath, "push", "-u", remote, branch)
+	return err
+}
+
+func (r realGit) CommitCount(ctx context.Context, worktreePath, baseRef string) (int, error) {
+	out, err := r.gitOut(ctx, worktreePath, "rev-list", "--count", baseRef+"..HEAD")
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, b := range []byte(out) {
+		if b >= '0' && b <= '9' {
+			n = n*10 + int(b-'0')
+		}
+	}
+	return n, nil
 }
