@@ -1,0 +1,9 @@
+scripts/agent-loop/README.md
+  ai_agent 6-10,15-30,39-41,46,48,50,66-138,143,146-155,160-165,175,177-179,181-182,187-189,207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "86597576ce3ae2613d0bf1a1f3d9990664361799",
+  "prompts": {}
+}
