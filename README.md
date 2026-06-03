@@ -58,13 +58,15 @@ Pass `--offline` to skip all upstream lookups; every tracked row's `UPSTREAM` re
 
 If `openspec/schemas/` is missing or empty, prints `No OpenSpec schemas installed` and exits 0.
 
-### Update an installed schema
+### Update installed schemas
 
 ```
-osch update <schema> [--force]
+osch update [schema] [--force]
 ```
 
-Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "already up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit.
+Reads `openspec/schemas/<schema>/.osch.json`, resolves the upstream default branch's HEAD commit, and overwrites the local schema folder with the upstream bytes at that SHA. The manifest is rewritten with the new SHA and a refreshed per-file SHA-256 `files` map; files removed upstream are deleted locally and files added upstream are written locally. If the pinned SHA already matches upstream the command is a no-op and reports "up to date". If the schema folder or its `.osch.json` is missing the command aborts with a non-zero exit.
+
+With no schema argument, every tracked schema (any subfolder of `openspec/schemas/` containing a readable `.osch.json`) is processed in alphabetical order. Per-schema outcomes are printed as separate sections (schema name on its own line, body indented two spaces, blank line between sections); a refusal or failure in one schema does not stop the others. The process exits non-zero if any schema was refused or failed, otherwise zero. `--force` applies to every schema in the batch. If there are no tracked schemas the command prints `no tracked schemas to update` and exits 0.
 
 Before any network call, `osch update` checks the local schema against the per-file SHA-256 hashes in `.osch.json`. If any tracked file's content has changed, a tracked file is missing, or an extra untracked file is present (excluding `.osch.json` and the local-only `.osch/` directory), the command aborts with a non-zero exit and an error that lists every offending path. No files are written, deleted, or otherwise touched on refusal. The check is fully offline — a refusal makes zero upstream calls. Pass `--force` to skip the refusal and proceed with the update; the always-on snapshot still captures the pre-update state (including any edits and extra untracked files) so you can recover from `openspec/schemas/<schema>/.osch/<timestamp>/`. `--force` only disables this one check — every other error path (upstream-resolve, snapshot-write, fetch, write/prune, manifest read/write) still aborts the command.
 
