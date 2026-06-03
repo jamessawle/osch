@@ -1,0 +1,11 @@
+go.mod
+  ai_agent 41
+go.sum
+  ai_agent 86-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "a58cee2257266d1408f847d1eada6617f89d3a62",
+  "prompts": {}
+}
