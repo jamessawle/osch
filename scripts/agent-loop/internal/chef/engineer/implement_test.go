@@ -85,6 +85,23 @@ func (f *fakeGit) CommitCount(_ context.Context, worktree, base string) (int, er
 	return f.commits[worktree], nil
 }
 
+type fakeGitErr struct {
+	fetchErr error
+	addErr   error
+	pushErr  error
+	commits  map[string]int
+}
+
+func (f *fakeGitErr) Fetch(_ context.Context, _, _, _ string) error { return f.fetchErr }
+func (f *fakeGitErr) WorktreeAdd(_ context.Context, _, _, _, _ string) error {
+	return f.addErr
+}
+func (f *fakeGitErr) WorktreeRemove(_ context.Context, _, _ string) error { return nil }
+func (f *fakeGitErr) Push(_ context.Context, _, _, _ string) error        { return f.pushErr }
+func (f *fakeGitErr) CommitCount(_ context.Context, worktree, _ string) (int, error) {
+	return f.commits[worktree], nil
+}
+
 type fakeGH struct {
 	pr       engineer.PRInfo
 	prErr    error
@@ -260,4 +277,148 @@ func TestRunImplement_MultipleFailuresAllFedBack(t *testing.T) {
 	require.GreaterOrEqual(t, len(claude.calls), 2)
 	assert.Contains(t, claude.calls[1].Prompt, "go vet ./...")
 	assert.Contains(t, claude.calls[1].Prompt, "go test ./...")
+}
+
+func TestRunImplement_FetchFailure(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	gh := &fakeGH{}
+	git := &fakeGitErr{fetchErr: errors.New("network down")}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "300"},
+		RepoPath: repoDir,
+	}, engineer.Deps{Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: git, GH: gh})
+	require.Error(t, err)
+	require.Len(t, gh.comments, 1)
+	assert.Contains(t, gh.comments[0], "board setup")
+}
+
+func TestRunImplement_ConfigMissing(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "301")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+
+	gh := &fakeGH{}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "301"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: &fakeClaude{}, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, engineer.ErrConfigMissing)
+	require.Len(t, gh.comments, 1)
+}
+
+func TestRunImplement_SetupCommandFails(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "302")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	sh := &fakeShell{outputs: map[string]shellOutput{
+		"go mod download": {Output: "permission denied", Err: errExitNonZero},
+	}}
+	gh := &fakeGH{}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "302"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: &fakeClaude{}, Shell: sh, Git: &fakeGit{}, GH: gh,
+	})
+	require.Error(t, err)
+	require.Len(t, gh.comments, 1)
+	assert.Contains(t, gh.comments[0], "permission denied")
+}
+
+func TestRunImplement_ZeroCommits(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "303")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{{Output: "did nothing"}}}
+	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 0}}
+	gh := &fakeGH{}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "303"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "zero new commits")
+	require.Len(t, gh.comments, 1)
+}
+
+func TestRunImplement_ClaudeCrashFatal(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "304")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{{Err: errExitNonZero, Output: "panic"}}}
+	gh := &fakeGH{}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "304"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: &fakeGit{}, GH: gh,
+	})
+	require.Error(t, err)
+	assert.Len(t, claude.calls, 1, "no retry on claude crash")
+	require.Len(t, gh.comments, 1)
+}
+
+func TestRunImplement_PushFailure(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "305")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{
+		{Output: "a"}, {Output: "body"}, {Output: "feat: x"},
+	}}
+	git := &fakeGitErr{
+		commits: map[string]int{layout.WorktreePath: 1},
+		pushErr: errors.New("rejected"),
+	}
+	gh := &fakeGH{}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "305"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
+	})
+	require.Error(t, err)
+	require.Len(t, gh.comments, 1)
+	assert.Contains(t, gh.comments[0], "rejected")
+}
+
+func TestRunImplement_PRCreateFailure(t *testing.T) {
+	t.Parallel()
+	repoDir := t.TempDir()
+	layout := engineer.DeriveWorktreeLayout(repoDir, "306")
+	require.NoError(t, mkdirAll(layout.WorktreePath))
+	writeBrigadeYAML(t, layout.WorktreePath)
+
+	claude := &fakeClaude{outputs: []claudeOutput{
+		{Output: "a"}, {Output: "body"}, {Output: "feat: x"},
+	}}
+	git := &fakeGit{commits: map[string]int{layout.WorktreePath: 1}}
+	gh := &fakeGH{prErr: errors.New("gh: 403")}
+	_, err := engineer.RunImplement(t.Context(), engineer.ImplementInput{
+		TaskRef:  engineer.TaskRef{Source: "github", ID: "306"},
+		RepoPath: repoDir,
+	}, engineer.Deps{
+		Claude: claude, Shell: &fakeShell{}, Git: git, GH: gh,
+	})
+	require.Error(t, err)
+	require.Len(t, gh.comments, 1)
+	assert.Contains(t, gh.comments[0], "403")
 }
