@@ -1,0 +1,19 @@
+scripts/agent-loop/cmd/brigade/main.go
+  ai_agent 1-39
+go.sum
+  ai_agent 86-87
+scripts/agent-loop/cmd/brigade/chef/chef.go
+  ai_agent 1-65
+scripts/agent-loop/cmd/brigade/chef/chef_test.go
+  ai_agent 1-50
+scripts/agent-loop/internal/chef/engineer/engineer.go
+  ai_agent 5-6,51-93
+go.mod
+  ai_agent 12,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "fd20adfafaf03ab7d665f756291a1af10666042b",
+  "prompts": {}
+}
