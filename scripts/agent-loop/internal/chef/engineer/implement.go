@@ -215,19 +215,55 @@ func buildImplementPrompt(in ImplementInput, checks []string, failingChecks stri
 }
 
 func generatePRBody(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
-	out, err := claude.Run(ctx, layout.WorktreePath, "Write a PR body for the implementation just completed for task: "+in.Title)
+	prompt := "Use the /pr-management:write-pr-description skill to produce a pull request description " +
+		"for the commits on the current branch (compared to origin/main). The PR implements GitHub issue #" +
+		in.TaskRef.ID + ": \"" + in.Title + "\".\n\n" +
+		"Output ONLY the PR description markdown to stdout, with no preamble, no commentary, no trailing text, " +
+		"and DO NOT wrap the output in code fences. The description should cover what changed and why " +
+		"(not a diff restatement), the approach chosen, and any trade-offs or follow-ups worth noting."
+	out, err := claude.Run(ctx, layout.WorktreePath, prompt)
 	if err != nil || strings.TrimSpace(out) == "" {
 		return "Implements #" + in.TaskRef.ID + "."
 	}
-	return out
+	return stripCodeFence(strings.TrimSpace(out))
+}
+
+// stripCodeFence removes a single outer ```lang ... ``` fence if one wraps the entire string.
+func stripCodeFence(s string) string {
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	// drop the opening fence line
+	nl := strings.IndexByte(s, '\n')
+	if nl < 0 {
+		return s
+	}
+	inner := s[nl+1:]
+	inner = strings.TrimRight(inner, "\n")
+	if !strings.HasSuffix(inner, "```") {
+		return s
+	}
+	return strings.TrimRight(inner[:len(inner)-3], "\n")
 }
 
 func generatePRTitle(ctx context.Context, claude ClaudeRunner, in ImplementInput, layout WorktreeLayout) string {
-	out, err := claude.Run(ctx, layout.WorktreePath, "Write a one-line conventional-commits PR title for task: "+in.Title)
-	if err != nil || strings.TrimSpace(out) == "" {
-		return "chore: " + in.Title
+	prompt := "Generate a single Conventional Commits PR title for the commits on the current branch " +
+		"(compared to origin/main). The PR implements GitHub issue #" + in.TaskRef.ID + ": \"" + in.Title + "\".\n\n" +
+		"Requirements:\n" +
+		"- Format: type(scope)?: subject  (scope optional)\n" +
+		"- Subject in lowercase, no trailing period, no issue number suffix.\n" +
+		"- Hard cap at 72 characters.\n\n" +
+		"Output ONLY the title text, a single line, with no preamble or commentary."
+	out, err := claude.Run(ctx, layout.WorktreePath, prompt)
+	generated := strings.TrimSpace(out)
+	if err == nil && generated != "" {
+		if final, replaced := ConformOrFallback(generated, in.Title); !replaced {
+			return final
+		}
 	}
-	final, _ := ConformOrFallback(strings.TrimSpace(out), in.Title)
+	// Generated title was rejected (or claude failed). Try the issue title itself before
+	// double-prefixing it with chore:.
+	final, _ := ConformOrFallback(in.Title, in.Title)
 	return final
 }
 
