@@ -1,0 +1,9 @@
+.brigade.yml
+  ai_agent 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.10",
+  "base_commit_sha": "74fe497d6984983aafca8276f1f958dc86b492dc",
+  "prompts": {}
+}
