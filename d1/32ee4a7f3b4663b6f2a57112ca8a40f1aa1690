@@ -1,0 +1,19 @@
+CONTRIBUTING.md
+  s_79ed4e956de66d::t_34a2cc21bbb4f0 4-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d132ee4a7f3b4663b6f2a57112ca8a40f1aa1690",
+  "prompts": {},
+  "sessions": {
+    "s_79ed4e956de66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c60be28-d14e-4b77-85b6-25f95ac0d23a",
+        "model": "unknown"
+      },
+      "human_author": "James Sawle <jamessawle@hotmail.com>"
+    }
+  }
+}
