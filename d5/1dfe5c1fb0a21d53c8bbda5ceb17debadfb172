@@ -1,0 +1,19 @@
+.out-of-scope/osch-namespace.md
+  s_79ed4e956de66d::t_766574f78c598e 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "d51dfe5c1fb0a21d53c8bbda5ceb17debadfb172",
+  "prompts": {},
+  "sessions": {
+    "s_79ed4e956de66d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c60be28-d14e-4b77-85b6-25f95ac0d23a",
+        "model": "unknown"
+      },
+      "human_author": "James Sawle <jamessawle@hotmail.com>"
+    }
+  }
+}
