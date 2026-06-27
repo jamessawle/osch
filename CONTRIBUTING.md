@@ -1,8 +1,17 @@
 # Contributing to osch
 
 Thanks for contributing. This guide covers the commit conventions the project
-follows. For how the codebase is structured and why decisions were made, see
-`docs/architecture/` and `docs/adr/`.
+follows and how rejected feature requests are recorded. For how the codebase is
+structured and why decisions were made, read the code alongside the ADRs in
+`docs/adr/`.
+
+## Rejected feature requests
+
+Feature requests we've decided not to pursue are recorded under
+`.out-of-scope/`, one file per concept, each with the reasoning and concrete
+criteria for when we'd reconsider. Before filing a feature request, check
+whether it's already there — if it is and you think the situation has changed,
+say which reopen criterion now applies rather than opening a fresh issue.
 
 ## Commit messages
 
