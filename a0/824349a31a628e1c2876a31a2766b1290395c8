@@ -1,0 +1,19 @@
+.gitignore
+  s_ec710ceaa63105::t_77fb1d81038e15 20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "a0824349a31a628e1c2876a31a2766b1290395c8",
+  "prompts": {},
+  "sessions": {
+    "s_ec710ceaa63105": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1783a78b-fc42-4cc5-8f6d-7f3091d25d4c",
+        "model": "unknown"
+      },
+      "human_author": "James Sawle <jamessawle@hotmail.com>"
+    }
+  }
+}
