@@ -1,0 +1,21 @@
+README.md
+  s_ec710ceaa63105::t_9e8af88e257e49 27,30-44
+docs/adr/0008-homebrew-cask-macos-only.md
+  s_ec710ceaa63105::t_0bd90db1431205 57-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "9575126644551ce75c43a5c337cf88b0c88c83dd",
+  "prompts": {},
+  "sessions": {
+    "s_ec710ceaa63105": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1783a78b-fc42-4cc5-8f6d-7f3091d25d4c",
+        "model": "unknown"
+      },
+      "human_author": "James Sawle <jamessawle@hotmail.com>"
+    }
+  }
+}
