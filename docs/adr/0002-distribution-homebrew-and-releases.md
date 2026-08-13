@@ -1,7 +1,13 @@
 # 0002. Distribution: Homebrew tap and GitHub releases
 
-- Status: Accepted
+- Status: Accepted, amended by [ADR-0008](0008-homebrew-cask-macos-only.md)
 - Date: 2026-05-27
+
+> **Amendment:** [ADR-0008](0008-homebrew-cask-macos-only.md) narrows the
+> Homebrew channel below to **macOS only**. `osch` is published to the tap as a
+> cask rather than a formula, and Homebrew cannot install a cask on Linux, so
+> Linux users are served by the GitHub release tarballs alone. The rest of this
+> ADR stands.
 
 ## Context
 

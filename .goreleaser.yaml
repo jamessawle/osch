@@ -44,12 +44,18 @@ changelog:
   use: github
   sort: asc
   groups:
+    # Breaking changes are matched first so a `feat!:`/`fix!:` commit lands here
+    # rather than silently under Features or Bug fixes. Groups are evaluated in
+    # order, and the first matching regexp wins.
+    - title: Breaking changes
+      regexp: '^.*?(feat|fix|chore|docs|refactor|test|ci|build|revert)(\(.+\))?!:.+$'
+      order: 0
     - title: Features
       regexp: '^.*?feat(\(.+\))?!?:.+$'
-      order: 0
+      order: 1
     - title: Bug fixes
       regexp: '^.*?fix(\(.+\))?!?:.+$'
-      order: 1
+      order: 2
     - title: Other changes
       order: 999
   filters:
@@ -64,7 +70,7 @@ release:
   draft: false
   prerelease: auto
 
-brews:
+homebrew_casks:
   - name: osch
     repository:
       owner: jamessawle
@@ -75,13 +81,27 @@ brews:
         enabled: true
         base:
           branch: main
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/jamessawle/osch"
     description: "CLI for managing OpenSpec schemas across repos"
     license: "MIT"
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: "chore(brew): osch {{ .Tag }}"
-    test: |
-      system bin/"osch", "version"
+    binaries:
+      - osch
+    # The Linux archives are deliberately included. Homebrew cannot install a
+    # cask on Linux, but `brew readall --os=all --arch=all` rejects a cask that
+    # resolves no checksum on a platform it evaluates, and GoReleaser has no
+    # `depends_on macos:` support to declare the cask macOS-only instead.
+    #
+    # The postflight hook is GoReleaser's documented remedy for binaries that
+    # are neither signed nor notarized. Without it macOS refuses to run the
+    # installed executable.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/osch"]
+          end
+    caveats: |
+      osch is not signed or notarized with an Apple Developer certificate.
+      Installing it removes the macOS quarantine attribute from the executable
+      so that Gatekeeper does not refuse to run it.

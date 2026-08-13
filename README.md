@@ -16,11 +16,26 @@ osch update              # refresh it later
 
 ## Install
 
+### macOS
+
 ```
-brew install jamessawle/tap/osch
+brew install --cask jamessawle/tap/osch
 ```
 
-> **Note:** The Homebrew formula is published by the release pipeline. If the command above fails because the formula doesn't exist yet, the pipeline may not have run for a release — build from source instead (see below).
+`osch` is not signed or notarized with an Apple Developer certificate; the cask strips the macOS quarantine attribute on install so Gatekeeper does not refuse to run it.
+
+**Upgrading from a version installed before 0.2.0:** `osch` used to be published as a Homebrew *formula*. `brew upgrade` will not move a formula install onto the cask, so uninstall the formula first:
+
+```
+brew uninstall osch
+brew install --cask jamessawle/tap/osch
+```
+
+### Linux
+
+Homebrew cannot install casks on Linux, so download the `linux_amd64` or `linux_arm64` tarball from the [latest release](https://github.com/jamessawle/osch/releases/latest), verify it against the release's `checksums.txt`, and put the `osch` binary somewhere on your `PATH`. See [ADR-0008](docs/adr/0008-homebrew-cask-macos-only.md) for why the Homebrew channel is macOS-only.
+
+> **Note:** Both channels are published by the release pipeline. If a command above fails because the package doesn't exist yet, the pipeline may not have run for a release — build from source instead (see below).
 
 ## Build from source
 

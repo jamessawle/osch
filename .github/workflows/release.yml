@@ -26,7 +26,14 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: "~> v2"
+          # Casks generated before goreleaser/goreleaser#6752 emit `on_intel`
+          # before `on_arm` and a blank line before the closing `end`, which the
+          # tap's `brew style` job rejects. That fix is merged but unreleased —
+          # the latest stable is 2.17.1 — so this tracks the nightly until
+          # 2.18.0 ships. A dated nightly tag cannot be pinned instead because
+          # nightlies are pruned after roughly a week. Pin this back to
+          # `"~> v2"` once 2.18.0 is out.
+          version: nightly
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
