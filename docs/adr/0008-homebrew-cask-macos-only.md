@@ -54,9 +54,20 @@ pipeline.
 
 - The install command changes to `brew install --cask jamessawle/tap/osch`. This
   is a breaking change for two groups, so it ships as `v0.2.0`: existing
-  formula-installed macOS users are not upgraded by `brew upgrade` (the tap no
-  longer publishes a formula of that name) and must `brew uninstall osch` and
-  reinstall; Linux Homebrew users lose `brew install` entirely.
+  formula-installed macOS users are not upgraded by `brew upgrade`, because the
+  tap no longer publishes a formula of that name and so nothing reads as
+  outdated; Linux Homebrew users lose `brew install` entirely.
+- Existing macOS users are migrated automatically all the same, by a
+  `tap_migrations.json` entry in the tap mapping `osch` to `jamessawle/tap`. On
+  `brew update` Homebrew sees the deleted formula, resolves the mapping to a
+  cask, and runs the unlink/install itself. This is the only mechanism that
+  reaches an already-installed user: `deprecate!` was considered and does not,
+  because its notice is only emitted for formulae being installed or upgraded,
+  and a formula frozen at its final version is never either. The migration fires
+  from the deleted-formula entry in the diff a given `brew update` spans, so it
+  reaches everyone who had not updated since the formula was removed; anyone who
+  had must migrate by hand. It also leaves the old keg on disk, unlinked, for the
+  user to remove.
 - Linux users get no discovery or upgrade story through a package manager —
   manual download and manual re-download to upgrade. This is a real regression
   for them and the reason this needed recording rather than deciding quietly.

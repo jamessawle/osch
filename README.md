@@ -24,10 +24,24 @@ brew install --cask jamessawle/tap/osch
 
 `osch` is not signed or notarized with an Apple Developer certificate; the cask strips the macOS quarantine attribute on install so Gatekeeper does not refuse to run it.
 
-**Upgrading from a version installed before 0.2.0:** `osch` used to be published as a Homebrew *formula*. `brew upgrade` will not move a formula install onto the cask, so uninstall the formula first:
+**Upgrading from a version installed before 0.2.0:** `osch` used to be published as a Homebrew *formula*. The tap records the move, so `brew update` migrates you automatically — it installs the cask, unlinks the old formula, and reports:
 
 ```
-brew uninstall osch
+==> jamessawle/tap/osch has been migrated from a formula to a cask.
+```
+
+Note that `brew upgrade` alone will not do this, and will not tell you anything is wrong: the formula no longer exists in the tap, so there is nothing for it to find outdated. The migration happens on `brew update`.
+
+The old formula's files are left behind, unlinked and unused. Remove them when convenient:
+
+```
+brew uninstall --formula --force osch
+```
+
+If you already ran `brew update` between 0.2.0 being published and the tap recording the move, the automatic migration will not fire for you. Migrate by hand:
+
+```
+brew uninstall --formula --force osch
 brew install --cask jamessawle/tap/osch
 ```
 
