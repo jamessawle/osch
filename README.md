@@ -45,6 +45,12 @@ brew uninstall --formula --force osch
 brew install --cask jamessawle/tap/osch
 ```
 
+**If `brew upgrade` stops updating `osch`:** Homebrew 6 requires non-official taps to be trusted, and installs made under Homebrew 5 predate that. Installing by name grants trust implicitly, but `brew upgrade` does not name the tap, so it skips it with only a passing `Skipping jamessawle/tap because it is not trusted` notice. Trust the tap once:
+
+```
+brew trust jamessawle/tap
+```
+
 ### Linux
 
 Homebrew cannot install casks on Linux, so download the `linux_amd64` or `linux_arm64` tarball from the [latest release](https://github.com/jamessawle/osch/releases/latest), verify it against the release's `checksums.txt`, and put the `osch` binary somewhere on your `PATH`. See [ADR-0008](docs/adr/0008-homebrew-cask-macos-only.md) for why the Homebrew channel is macOS-only.
