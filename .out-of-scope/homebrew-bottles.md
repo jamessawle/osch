@@ -1,10 +1,13 @@
 # Homebrew Bottles
 
-`osch` does **not** ship Homebrew bottles. The Homebrew formula is the
-`url`-source formula that GoReleaser's `brews:` block renders into the
-`jamessawle/homebrew-tap` tap — a tarball with `bin.install "osch"`, installed
-through Homebrew's source-install code path rather than poured from a
-`bottle do … sha256 …` block.
+`osch` does **not** ship Homebrew bottles. Since 0.2.0 it is not published as a
+formula at all: GoReleaser's `homebrew_casks:` block renders `Casks/osch.rb` into
+the `jamessawle/homebrew-tap` tap (see #91 and
+[ADR-0008](../docs/adr/0008-homebrew-cask-macos-only.md)). Bottles are a
+formula-only concept, so the question no longer applies. The reasoning below is
+kept because it is what the decision rested on when a formula was still in play,
+and it remains the reason bottles would still be rejected if the project ever
+returned to one.
 
 ## Why this is out of scope
 
@@ -39,12 +42,16 @@ this should be reopened as a deliberate design exercise — including a
 superseding/amending ADR against 0003, since bottle building introduces
 release machinery GoReleaser cannot own.
 
-## Known accepted limitation
+## Resolved limitation
 
-`brew install --build-from-source osch` is currently a silent no-op — it
-delivers the same prebuilt binary as a normal install. We are choosing to live
-with this at present rather than make the flag meaningful or unsupported.
+While `osch` was a formula, `brew install --build-from-source osch` was a silent
+no-op — it delivered the same prebuilt binary as a normal install — and we chose
+to live with that. The cask migration (#91) removed the source-install path
+entirely, so the flag no longer applies to `osch` and there is nothing left to
+live with.
 
 ## Prior requests
 
 - #68 — "Ship Homebrew bottles instead of URL-source formula"
+- #91 — "Distribute osch as a Homebrew cask instead of a formula" (the migration
+  that made bottles moot)
