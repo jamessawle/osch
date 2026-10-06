@@ -14,8 +14,8 @@ Category roles map 1:1 to the existing GitHub defaults: `bug` and `enhancement`.
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-## Relationship to the agent loop
+## Relationship to the agent orchestrator
 
-`ready-for-agent` is the entry gate for `scripts/agent-loop/loop.sh` — the loop polls for it, then manages its own runtime state in `agent:in-progress`, `agent:failed`, and `agent:authored`. Those `agent:*` labels are loop runtime states, **not** triage roles; don't apply them during triage.
+`ready-for-agent` is the entry gate for the external agent orchestrator (see `.brigade.yml`), which manages its own runtime state in `agent:*` labels. Those are orchestrator runtime states, **not** triage roles; don't apply them during triage.
 
 Edit the right-hand column to match whatever vocabulary you actually use.
