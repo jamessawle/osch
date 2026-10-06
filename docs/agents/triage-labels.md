@@ -16,6 +16,6 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 ## Relationship to the agent orchestrator
 
-`ready-for-agent` is the entry gate for the external agent orchestrator (see `.brigade.yml`), which manages its own runtime state in `agent:*` labels. Those are orchestrator runtime states, **not** triage roles; don't apply them during triage.
+`ready-for-agent` is the entry gate for the external agent orchestrator, which manages its own runtime state in `agent:*` labels. Those are orchestrator runtime states, **not** triage roles; don't apply them during triage.
 
 Edit the right-hand column to match whatever vocabulary you actually use.
