@@ -80,11 +80,13 @@ This keeps issue traceability in the history without relying on PR metadata.
 
 ## Before you commit
 
-Tool versions are pinned in `mise.toml`. Install [mise](https://mise.jdx.dev/),
+Tool versions are pinned in `mise.toml`. [Install
+mise](https://mise.jdx.dev/getting-started.html) and
+[activate it in your shell](https://mise.jdx.dev/getting-started.html#activate-mise),
 then run `mise run setup` once after cloning to install the tools and the local
-git hooks via [lefthook](https://github.com/evilmartians/lefthook). They run
-the same checks as CI (`gofmt`, `go vet`, `golangci-lint`) on every commit. You
-can also run the checks manually:
+git hooks via [lefthook](https://github.com/evilmartians/lefthook).
+They run the same checks as CI (`gofmt`, `go vet`, `golangci-lint`) on every
+commit. You can also run the checks manually:
 
 - `mise run lint` — `golangci-lint run`
 - `mise run test` — `go test ./...`
