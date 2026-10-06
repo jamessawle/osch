@@ -82,9 +82,9 @@ This keeps issue traceability in the history without relying on PR metadata.
 
 Tool versions are pinned in `mise.toml`. Install [mise](https://mise.jdx.dev/),
 then run `mise run setup` once after cloning to install the tools and the local
-git hooks via [lefthook](https://github.com/evilmartians/lefthook). They run the same checks
-as CI (`gofmt`, `go vet`, `golangci-lint`) on every commit. You can also run
-the checks manually:
+git hooks via [lefthook](https://github.com/evilmartians/lefthook). They run
+the same checks as CI (`gofmt`, `go vet`, `golangci-lint`) on every commit. You
+can also run the checks manually:
 
 - `mise run lint` — `golangci-lint run`
 - `mise run test` — `go test ./...`
