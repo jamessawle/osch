@@ -15,7 +15,7 @@ If an acceptance criterion is unclear, stop and comment on the issue rather than
 When adding or changing a user-facing command, update `README.md` under Usage in the same PR.
 
 ## PR descriptions
-When opening a pull request (either manually or via the agent loop), use the
+When opening a pull request (either manually or via an agent), use the
 `/pr-management:write-pr-description` skill to generate the body. The skill
 is enabled at the project level via `.claude/settings.json`.
 
@@ -30,7 +30,7 @@ Issues live in `jamessawle/osch` GitHub Issues, via the `gh` CLI. See `docs/agen
 ### Triage labels
 The five canonical triage roles map 1:1 to GitHub labels of the same name
 (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`);
-`ready-for-agent` is the agent loop's entry gate. See `docs/agents/triage-labels.md`.
+`ready-for-agent` is the agent orchestrator's entry gate. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 Single-context: one `CONTEXT.md` (created lazily by `grill-with-docs`) + `docs/adr/` at the root. See `docs/agents/domain.md`.
