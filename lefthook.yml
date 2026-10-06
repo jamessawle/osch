@@ -1,7 +1,7 @@
 commit-msg:
   commands:
     conventional-commits:
-      run: go tool conform enforce --commit-msg-file {1}
+      run: conform enforce --commit-msg-file {1}
 
 pre-commit:
   parallel: true
@@ -17,4 +17,4 @@ pre-commit:
     govet:
       run: go vet ./...
     golangci-lint:
-      run: go tool golangci-lint run
+      run: golangci-lint run

@@ -18,7 +18,7 @@ say which reopen criterion now applies rather than opening a fresh issue.
 We follow [Conventional Commits](https://www.conventionalcommits.org/). Two
 layers of enforcement keep commits and PR titles in line with the convention:
 
-- A `commit-msg` hook (installed by `make setup`) runs
+- A `commit-msg` hook (installed by `mise run setup`) runs
   [`conform`](https://github.com/siderolabs/conform) against the message and
   rejects commits whose header doesn't match. The configuration lives in
   `.conform.yaml`.
@@ -80,11 +80,14 @@ This keeps issue traceability in the history without relying on PR metadata.
 
 ## Before you commit
 
-Run `make setup` once after cloning to install the local git hooks via
-[lefthook](https://github.com/evilmartians/lefthook). They run the same checks
-as CI (`gofmt`, `go vet`, `golangci-lint`) on every commit. You can also run
-the checks manually:
+Tool versions are pinned in `mise.toml`. [Install
+mise](https://mise.jdx.dev/getting-started.html) and
+[activate it in your shell](https://mise.jdx.dev/getting-started.html#activate-mise),
+then run `mise run setup` once after cloning to install the tools and the local
+git hooks via [lefthook](https://github.com/evilmartians/lefthook).
+They run the same checks as CI (`gofmt`, `go vet`, `golangci-lint`) on every
+commit. You can also run the checks manually:
 
-- `make lint` — `golangci-lint run`
-- `make test` — `go test ./...`
-- `make build` — `go build ./...`
+- `mise run lint` — `golangci-lint run`
+- `mise run test` — `go test ./...`
+- `mise run build` — `go build ./...`

@@ -1,0 +1,26 @@
+min_version = "2026.8.2"
+
+[tools]
+conform = "0.1.0-alpha.31"
+go = "1.25.14"
+golangci-lint = "2.5.0"
+lefthook = "1.13.6"
+
+[tasks.setup]
+description = "Install development tools and activate Git hooks"
+run = '''
+mise install
+lefthook install
+'''
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.test]
+description = "Run the test suite"
+run = "go test ./..."
+
+[tasks.build]
+description = "Build all packages"
+run = "go build ./..."

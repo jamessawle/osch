@@ -17,10 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
         with:
-          go-version-file: go.mod
-          cache: true
+          version: 2026.8.2 # Keep aligned with mise.toml min_version.
 
       - name: Build
         run: go build ./...
@@ -41,6 +40,4 @@ jobs:
           fi
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.5.0
+        run: mise run lint
